@@ -1,0 +1,425 @@
+/* 共通レイアウト */
+/* 共通ボックス */
+.scrollbox { 
+    overflow-y: auto;
+    max-height: 70vh;
+    height: 60vh;
+    border: 1.5px solid #ccc;
+}
+/* 抽出用のセット */
+.cuttitlebox{
+    margin-bottom:0;
+}
+
+.Extractscrollbox {
+    overflow-y: auto;
+    max-height: 60vh;
+    height: 50vh;
+    border: 1.5px solid #ccc;
+}
+/* スクロール内テーブルだけ個別設定 */
+.Extractscrollbox .styled-table {
+    border-collapse: separate; /* ← stickyとの相性調整 */
+}
+
+.Extractscrollbox .styled-table thead th {
+    position: sticky;
+    top: 0;
+    background-color: #ffe2e2;
+    z-index: 1;
+    box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.4); /* 任意 */
+}
+
+
+.search-box-wrapper {
+    display: flex;
+    justify-content: center;
+
+    box-sizing: border-box;
+    padding: 0 1rem; /* 少し余白確保（任意） */
+    }
+
+    .search-box {
+    display: flex;
+    gap: 2rem;
+    align-items: flex-end;
+    flex-wrap: nowrap;
+    
+    justify-content: center; /* ← ここが効く */
+
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+    max-width: 1000px;
+    box-sizing: border-box;
+    border: 1.5px solid #ccc;
+    border-radius: 0.4rem;
+    background: #fff;
+}
+
+.search-box .input {
+    display: block;
+    min-width: 180px;
+    margin: 0 !important;
+}
+.search-form {
+  display: flex;
+  gap: 2rem;
+  justify-content: center;
+  align-items: flex-end;
+  width: auto;
+  margin: 0 auto;
+}
+
+.search-field {
+  display: flex;
+  flex-direction: column;
+  align-items: center;  /* ← これで中の label/input も中央揃え */
+  text-align: center;
+  min-width: 200px;
+}
+
+/* 抽出用のセット　終わり */
+
+.delivery-toast {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: #fff8e1;
+    color: #333;
+    padding: 1rem 1.5rem;
+    border: 1px solid #ccc;
+    border-radius: 0.5rem;
+    box-shadow: 0 0 10px rgba(0,0,0,0.2);
+    z-index: 10000;
+    font-weight: bold;
+}
+
+.countstatus {
+    margin: 0;
+}
+
+blockquote, dl, figure, form, ol, p, pre, table, ul {
+    margin-bottom: 1.5rem;
+}
+
+/* テーブル全体 */
+.styled-table {
+    width: 100%;
+    border-collapse: collapse;
+    border: 1.5px solid #ccc;
+    margin-bottom: 1.5rem;
+}
+.styled-table th {
+    background-color: #FDEAEA;
+}
+
+.styled-table td,
+.styled-table th {
+    
+    border-bottom: 0.1rem solid #e1e1e1;
+    padding: 1.5rem 2rem;
+    text-align: center;
+    vertical-align: middle;
+    border: 1px solid #d8d8d8;
+}
+
+.styled-table td:first-child,
+.styled-table th:first-child {
+    padding-left: 15px;
+}
+
+.styled-table td:last-child,
+.styled-table th:last-child {
+    padding-right: 15px;
+}
+
+.highlight-row {
+    background-color: #d0ebff;
+}
+
+.styled-table td .input.checkbox {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 0 !important;
+    height: 100%; /* セルの高さに合わせる */
+}
+    .input input,
+.input select,
+.input textarea {
+    margin-bottom: 0 !important;
+}
+    /* 縦 */
+.flex-vertical {
+    padding-top:5%;
+    padding-left:5%;
+    display: flex;
+    flex-direction: column;
+    gap: 3rem;
+    
+    justify-content: center;
+}
+.input-range {
+    align-items: center;     /* ← 🔥 上揃え → 縦中央に変更！ */
+    display: flex;
+    gap: 0.5rem;
+}
+.label-stack {
+    display: flex;
+    flex-direction: column; /* 🔥 ラベルと必須を縦に */
+    font-size: 2rem;
+    align-items: center; /* 🔥 中央寄せ追加 */
+
+    width: 9em;             /* 🔥 全label幅を固定して、inputの位置を揃える */
+}
+
+    .readonly-like {
+    background-color: #f5f5f5;  /* 淡いグレー */
+    color: #888;
+}
+/* 一覧の削除データを含めるチェックボックス */
+.deleted-filter {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 1rem;
+}
+.filter-label {
+    background-color: #49C5B6;
+    color: #fff;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    display: inline-block;
+}
+.filter-text {
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+.intable-wrapper {
+    max-height: 180px;
+    overflow-y: auto;
+    display: block;
+    border: 1px solid #333;
+    margin-top: 1rem;
+    width: 50%;
+}
+.intable {
+    border-collapse: collapse;
+    font-size: 1em;
+    border: none;
+}
+
+.intable th, .intable td {
+    border: 1px solid #ccc;
+    padding: 0.6rem 1rem;
+    text-align: left;
+}
+.intable th {
+    background-color: #CCE5FF;
+}
+.intable .namebox {
+    width: 50%;
+}
+.top-button {
+    padding: 6px 12px;
+    background-color: #eef;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    margin-left: 10px;
+    text-decoration: none;
+}
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.4);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+    }
+    .modal-content {
+      background: white;
+      padding: 2em;
+      border-radius: 8px;
+      max-width: 400px;
+      text-align: center;
+    }
+.title_box {
+display: flex;
+align-items: center;
+height: 50px;
+gap: 60px;
+}
+.title_box .title {
+    margin-right: auto;
+    margin: initial;
+    padding-left: 2rem;
+}
+.title_box .title2 {
+    margin-left: auto;
+    margin-top: initial;
+    padding: 2rem;
+}
+.count-right {
+    text-align: right;
+    padding-right: 2rem;
+    margin-top: 0.5rem;
+    margin-bottom: 1rem;
+}
+    input[readonly],
+    textarea[readonly],
+    select[readonly] {
+    background-color: #eee !important;
+    color: #555 !important;
+    cursor: not-allowed;
+}
+
+/* 以下改変予定あり仮※かぶりがあるため */
+.mUser.index.content,
+.TAnnounce.index.content {
+    position: relative; /* 親要素を相対位置に設定 */
+    height: 90vh; /* 高さを画面全体に設定 */
+}
+
+.titlebox{
+    top:20px;
+    width: 100%;
+    left: 50px;
+}
+.titlebox p1{
+    margin-bottom: 10px;
+    margin-top: 10px;
+    margin-left: 20px;
+    font-size: 24px;
+    font-weight: bold;
+}
+.passLeft{
+    position: absolute;
+    /* padding-left: 50px; */
+    top: 80px;
+    left: 50px;
+    width: 90%;
+}
+
+.Leftbox {
+    position: absolute;
+    top: 80px;
+    left: 50px;
+    width: 60%;
+}
+.Leftinbox{
+    width: 80%;
+}
+.Leftminibox{
+    width: 100%;
+    height: 15%;
+    margin-bottom: 10px;
+}
+.Leftminibox p{
+    margin:0;
+}
+.Leftminibox input{
+    margin:0;
+}
+
+.Rightbox {
+    bottom: 30px; 
+    right: 50px;
+    width: 50%;
+    height: 30%;
+    padding: 10px 5px;
+    position: absolute;
+
+    display: flex;
+    align-items: center;
+}
+.Rightinbox{
+    display: flex;
+    gap: 20px;
+    left:40%;
+    margin-left: auto; /* これが右寄せのポイント */
+}
+/* ボタン風リンクスタイル */
+.btn-like {
+    height: 38px;
+    display: inline-block;
+    padding: 6px 12px;
+    background-color: #d33c43;
+    color: white;
+    text-align: center;
+    text-decoration: none;
+    border: none;
+    border-radius: 4px;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+/* hover効果もつけると自然 */
+.btn-like:hover {
+    background-color: #606c76;
+}
+
+.TAnnounce .Rightbox{
+    bottom: 30px;
+    right: 50px;
+    width: 50%;
+    height: 30%;
+    padding: 10px 5px;
+    position: absolute;
+    display: flex;
+    align-items: center;
+    flex-direction: column;
+    justify-content: center; /* 縦方向中央揃え */
+}
+
+.TAnnounce .Rightinbox {
+    display: flex;
+    gap: 20px;
+    left: 40%;
+    margin-left: auto; /* 右寄せ */
+    margin-bottom:20px; 
+}
+.akabtn-like {
+    height: 50px;
+    width: 100px;
+    display: inline-block;
+    padding: 6px 12px;
+    background-color: #d33c43;
+    color: white;
+    text-decoration: none;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+
+    text-align: center;  /* 横方向の中央揃え */
+    font-size: 20px;     /* 文字サイズ調整 */
+}
+.aobtn-like {
+    height: 50px;
+    width: 100px;
+    display: inline-block;
+    padding: 6px 12px;
+    background-color: #3c58d3;
+    color: white;
+    text-decoration: none;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+
+    text-align: center;  /* 横方向の中央揃え */
+    font-size: 20px;     /* 文字サイズ調整 */
+}
+/* hover効果もつけると自然 */
+.btn-like:hover {
+    background-color: #606c76;
+}
+
+.input[type='checkbox'],input[type='checkbox']{
+        transform: scale(1.5); /* チェックボックスのサイズを1.5倍に */
+    margin: 0 auto;        /* 中央揃え */
+    display: block;        /* ブロック表示で中央寄せ */
+
+}
+
+

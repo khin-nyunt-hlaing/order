@@ -1,0 +1,188 @@
+<?php
+/**
+ * @var \App\View\AppView $this
+ * @var \Cake\Datasource\ResultSetInterface $tAnnounce
+ */
+?>
+<div class="tAnnounce index content">
+<div class="titlebox" style="display: flex; gap: 10px; 
+    align-items: center; margin-bottom:10px;">
+    <h3 class="title" style="margin: 0;">お知らせ一覧</h3>
+    <div class="filterbox" style="text-align:right; margin-left:auto;">
+        <?= $this->Form->create(null, ['type' => 'post', 'id' => 'announce-filter-form']) ?>
+            <?= $this->Form->control('announce_div', [
+                'type' => 'select',
+                'options' => $announceDivList,
+                'label' => false,
+                'empty' => 'すべて',
+                'value' => $selectedDiv,
+                'onchange' => 'document.getElementById("announce-filter-form").submit();'
+            ]) ?>
+        <?= $this->Form->end() ?>
+    </div>
+    <p class="countstatus" style="text-align:right;">件数 <?= $totalCount ?> 件</p>
+</div>
+
+<?= $this->Form->create(null, ['type' => 'post']) ?>
+<div class="scrollbox">
+<table border="1" cellpadding="5" cellspacing="0">
+    <thead>
+        <tr>
+            <th>選択</th>
+            <th>日付</th>
+            <th>区分</th>
+            <th>お知らせ</th>
+        </tr>
+    </thead>
+    <tbody>
+        <?php foreach ($tAnnounce as $announce): ?>
+            <?php
+                $modalId = 'modal-announce-' . $announce->announce_id;
+                $title = $announce->announce_title ?? 'タイトル未設定';
+
+                $attachedFiles = [];
+                for ($i = 1; $i <= 5; $i++) {
+                    $prop = "temp_filename{$i}";
+                    $fname = $announce->$prop ?? null;
+                    if (!empty($fname)) {
+                        $attachedFiles[] = [
+                            // 公開URLは announce 配下。ファイル名だけ URL エンコード
+                            'url'  => $this->Url->assetUrl(
+                                'uploads/announce/' . rawurlencode($fname),
+                            ),
+                            'name' => $fname, 
+                        ];
+                    }
+                }
+            ?>
+                <tr>
+                    <td><?= $this->Form->checkbox("select[{$announce->announce_id}]", ['class' => 'toggle-color']) ?></td>
+                    <td><?= h($announce->announce_start_date->format('Y-m-d')) ?></td>
+                    <td><?= h($announceDivList[$announce->announce_div] ?? '') ?></td>
+                    <td>
+                        <!-- 開くトリガー -->
+                        <button type="button"
+                                class="openModalBtn"
+                                data-target="<?= h($modalId) ?>"
+                                aria-controls="<?= h($modalId) ?>"
+                                aria-haspopup="dialog"
+                                style="cursor:pointer; color:blue; text-decoration:underline; background:none; border:none; padding:0;">
+                            <?= h($title) ?>
+                        </button>
+
+                        <!-- モーダル本体（element 呼び出し） -->
+                        <?= $this->element('modal_box', [
+                            'id'            => $modalId,
+                            'announceTitle' => $announce->announce_title,
+                            'announceText'  => $announce->announce_text,
+                            'attachedFiles' => $attachedFilesMap[$announce->announce_id] ?? []
+                        ]) ?>
+                    </td>
+                </tr>
+            <?php endforeach; ?>
+        </tbody>
+    </table>
+</div>
+
+<div style="display: flex; justify-content: space-between; align-items: center; margin-top: 20px;">
+    
+    <!-- 🔽 操作ボタン -->
+    <div>
+    <?= $this->Form->button('追加', ['name' => 'action', 'value' => 'add']) ?>
+    <?= $this->Form->button('更新', ['name' => 'action', 'value' => 'edit']) ?>
+    <?= $this->Form->button('削除', [
+    'name' => 'action',
+    'value' => 'delete',
+    'onclick' => 'return checkBeforeDelete();'
+    ]) ?>
+    </div>
+
+    <!-- 🔽 戻るリンク -->
+    <div style="margin-top: 20px;">
+        <?= $this->Html->link('戻る', ['controller' => 'Mmenus','action' => 'index'], ['class' => 'button',
+        'style'=>'display: flex; align-items: center;']) ?>
+    </div>
+</div>
+ <!-- 🔽 フォーム終了 -->
+<?= $this->Form->end() ?>
+
+<style>
+    .scrollbox {
+    overflow-y: auto;
+    max-height: 70vh;
+    height: 60vh;
+    border: 1.5px solid #ccc;
+    }
+
+    .countstatus{
+        margin:0;
+    }
+    /* ① 表ヘッダーの装飾 */
+    table thead th {
+    background-color:#FDEAEA; /* 任意の色：薄い青系 */
+    }
+    td, th {
+    border-bottom: 0.1rem solid #e1e1e1;
+    padding: 1.5rem 2rem;  /* 上下:1.5rem, 左右:2rem に拡張 */
+    }
+    td:first-child, th:first-child {
+    padding-left: 15px;
+    }
+    td:last-child, th:last-child {
+    padding-right: 15px;
+    }
+    blockquote, dl, figure, form, ol, p, pre, table, ul {
+    margin-bottom: 1.5rem;
+    }
+    .highlight-row {
+    background-color: #d0ebff;
+    }
+    .deleted-filter {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 1rem;
+    }
+
+    .filter-label {
+    background-color: #49c5b6;
+    color: #fff;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    display: inline-block;
+    }
+
+    .filter-text {
+    font-size: 0.9rem;
+    cursor: pointer;
+    }
+
+</style>
+
+<script>
+    $(document).ready(function() {
+        $('input.toggle-color[type="checkbox"]').on('change', function() {
+            let row = $(this).closest('tr');
+            if ($(this).is(':checked')) {
+                row.addClass('highlight-row');
+            } else {
+                row.removeClass('highlight-row');
+            }
+        });
+    });
+</script>
+<script>
+    function checkBeforeDelete() {
+        const checked = document.querySelectorAll('input[name^="select["]:checked');
+        const count = checked.length;
+
+        if (count === 0) {
+            // alert("削除するお知らせを選択してください。");
+            // return false;
+            return true; // フォームは送信する
+        }
+
+        return confirm(`${count}件選択されています。\n本当に削除しますか？`);
+    }
+</script>
