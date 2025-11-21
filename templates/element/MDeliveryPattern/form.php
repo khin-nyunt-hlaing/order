@@ -55,7 +55,7 @@
 
             <div class="input-range">
             <div class="label-stack">
-                <span>配食商品一覧</span>
+                <span>献立商品マスタ</span>
                 <span style="font-size: 1.5rem;">（複数選択可）</span>
             </div>
 

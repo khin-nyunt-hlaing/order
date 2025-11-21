@@ -29,6 +29,7 @@ class MUserGroup extends Entity
      * @var array<string, bool>
      */
     protected array $_accessible = [
+        'user_group_id'  => true,
         'user_group_name' => true,
         'disp_no' => true,
         'del_flg' => true,

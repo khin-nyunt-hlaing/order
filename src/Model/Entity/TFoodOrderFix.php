@@ -39,6 +39,8 @@ class TFoodOrderFix extends Entity
         'order_date' => true,
         'deli_req_date' => true,
         'deli_shedule_date' => true,
+        'deli_confirm_date' => true,
+        'export_confirm_date' => true,
         'food_id' => true,
         'order_quantity' => true,
         'order_status' => true,

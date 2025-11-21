@@ -7,7 +7,7 @@
 <div class="TFoodOrder index content">
 
 <div class="TFoodOrderbox1">
-    <p class="cuttitlebox">食材発注一覧</p>
+    <p class="cuttitlebox">単品食材発注一覧</p>
             
 
     <div class="search-box-wrapper">
@@ -54,9 +54,33 @@
                   'style' => 'width:140px;'
               ]) ?>
 
+              <!-- 追加 -->
+              <?php if ((int)$level === 1): ?>
+              <div class="search-row1">
+                  <label class="search-label">書出確定期間</label>
+
+                  <?= $this->Form->control('export_confirm_date_from', [
+                      'label' => false,
+                      'type' => 'date',
+                      'class' => 'start-date',
+                      'value' => $this->request->getQuery('export_confirm_date_from'),
+                      'style' => 'width:140px;'
+                  ]) ?>
+
+                  <div class="search-field" style="align-self:center; font-weight:bold; width:auto;">〜</div>
+
+                  <?= $this->Form->control('export_confirm_date_to', [
+                      'label' => false,
+                      'type' => 'date',
+                      'class' => 'end-date',
+                      'value' => $this->request->getQuery('export_confirm_date_to'),
+                      'style' => 'width:140px;'
+                  ]) ?>
+
+              </div>
+              <?php endif; ?>
+
           </div>
-
-
             <div class="search-row1">
                         <label class="search-label">発注状態</label>
                         <?= $this->Form->control('order_status', [
@@ -64,7 +88,7 @@
                             'type' => 'select',
                             'options' => ['0' => '未確定', '1' => '確定'],
                             'default' => '',
-                            'empty' => 'すべて',
+                            'empty' => '未選択',
                             'value' => $this->request->getQuery('order_status')
                         ]) ?>
 
@@ -95,7 +119,7 @@
 
               <div class="search-col" style="grid-column: 3; justify-self: end;">
                     <div class="search-field" style="max-width:120px;">
-                        <?= $this->Form->button('抽出', ['name' => 'action', 'value' => 'search']) ?>
+                        <?= $this->Form->button('検索', ['name' => 'action', 'value' => 'search']) ?>
                     </div>
                 </div>
             </div>
@@ -111,13 +135,16 @@
           <th>選択</th>
           <th>発注日</th>
           <th>納品希望日</th>
-
+          <th>納品予定日</th>
+          <th>確定納品日</th>
           <th>商品名</th>
           <th>規格</th>
           <th>発注数</th>
-
-          <th>施設名</th>
+          <?php if (in_array((int)$permissionCode, [1, 5])): ?> 
+            <th>施設名</th>
+          <?php endif; ?>
           <th>発注状態</th>
+          <th>書出確定日</th>
         </tr>
       </thead>
       <tbody>
@@ -147,13 +174,19 @@
 
             <td><?= h($order['order_date']) ?></td>
             <td><?= h($order['deli_req_date']) ?></td>
+            <td><?= h($order['deli_shedule_date']) ?></td>
+            <td><?= h($order['deli_confirm_date']) ?></td>
             <td><?= h($order['food_name']) ?></td>
             <td><?= h($order['food_specification']) ?></td>
             <td><?= h($order['order_quantity']) ?></td>
-            <td><?= h($order['user_name']) ?></td>
+            <?php if (in_array((int)$permissionCode, [1, 5])): ?>
+              <td><?= h($order['user_name']) ?></td>
+            <?php endif; ?>
+            
 
             <?php $statusLabels = [0 => '未確定', 1 => '確定']; ?>
             <td><?= h($statusLabels[$order['order_status']] ?? '不明') ?></td>
+            <td><?= h($order['export_confirm_date']) ?></td>
           </tr>
         <?php endforeach; ?>
       </tbody>
@@ -163,18 +196,15 @@
 
   <div class="TFoodOrderbox3" style="margin-top:5%; display: flex; justify-content: space-between; align-items: center;">
   <div class="inbox" style="display: flex; gap: 1rem;">
-     <?php if ((int)$level === 1): // 管理=全部 ?>
-      <?= $this->Form->button('追加', ['name' => 'action', 'value' => 'add']) ?>
-      <?= $this->Form->button('更新', ['name' => 'action', 'value' => 'edit']) ?>
+     <?php if ((int)$level ===1): // 管理=全部 ?>
+      <?= $this->Form->button('新規', ['name' => 'action', 'value' => 'add']) ?>
+      <?= $this->Form->button('編集', ['name' => 'action', 'value' => 'edit']) ?>
       <?= $this->Form->button('削除', [
     'name' => 'action',
     'value' => 'delete',
     'onclick' => 'return checkBeforeDelete();'
     ]) ?>
-  <!-- 確定ボタン -->
-  <button type="submit" name="action" value="confirm" class="dynamic-confirm" data-action="confirm" style="margin-left:10%;">
-    確定
-  </button>
+
 
   <!-- 確定解除ボタン -->
   <button type="submit" name="action" value="unconfirm" class="dynamic-confirm" data-action="unconfirm">
@@ -182,10 +212,19 @@
   </button>
 
       <?= $this->Form->button('データ書出', ['name' => 'action', 'value' => 'export']) ?>
+      
+  <!-- 確定ボタン -->
+   <?= $this->Form->create(null, [
+    'url' => ['action' => 'confirm'],
+    'type' => 'post'
+    ]) ?>
+  <button type="submit" name="action" value="confirm" class="dynamic-confirm" data-action="confirm" style="margin-left:10%;">
+    確定＋データ書出
+  </button>
 
     <?php elseif ((int)$level === 2): // 更新=追加・更新のみ（※削除/確定/解除/書出しは出さない） ?>
-      <?= $this->Form->button('追加', ['name' => 'action', 'value' => 'add']) ?>
-      <?= $this->Form->button('更新', ['name' => 'action', 'value' => 'edit']) ?>
+      <?= $this->Form->button('新規', ['name' => 'action', 'value' => 'add']) ?>
+      <?= $this->Form->button('編集', ['name' => 'action', 'value' => 'edit']) ?>
       <?= $this->Form->button('削除', [
       'name' => 'action',
       'value' => 'delete',
@@ -269,7 +308,7 @@
   /* 各行：横に並べる（折り返さない） */
       .search-row1 {
       display: flex;
-      flex-wrap: nowrap;
+      flex-wrap: wrap;
       gap: 1rem;
       margin: 0 auto;
       align-items: center;

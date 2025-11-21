@@ -41,10 +41,11 @@ class TFoodOrderTable extends AppTable
         $this->setDisplayField('food_order_id');
         $this->setPrimaryKey('food_order_id');
         
-                $this->belongsTo('MFoods', [
+        $this->belongsTo('MFoods', [
             'foreignKey' => 'food_id', // TFoodOrder 側の外部キー
             'joinType' => 'INNER',     // 必要に応じて 'LEFT' に変更可
         ]);
+        
         $this->belongsTo('MUsers', [
             'foreignKey' => 'user_id',
             'className' => 'MUser', // モデル名が単数なら className 必要
@@ -61,6 +62,13 @@ class TFoodOrderTable extends AppTable
             'foreignKey' => 'category_id',
             'joinType' => 'LEFT'
         ]);
+        $this->hasOne('TFoodOrderFix', [
+            'className' => 'TFoodOrderFix',
+            'foreignKey' => 'food_order_id',
+            'bindingKey' => 'food_order_id',
+            'joinType' => 'LEFT',
+        ]);
+      
     }
 
     /**

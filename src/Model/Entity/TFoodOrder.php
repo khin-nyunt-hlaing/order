@@ -38,6 +38,7 @@ class TFoodOrder extends Entity
         'user_id' => true,
         'order_date' => true,
         'deli_req_date' => true,
+        'deli_shedule_date' => true,
         'food_id' => true,
         'order_quantity' => true,
         'order_status' => true,

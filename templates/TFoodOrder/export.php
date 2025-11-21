@@ -12,7 +12,7 @@
 <!-- 🔍 抽出フォーム -->
  <?= $this->Form->create(null, ['type' => 'get', 'class' => 'search-form','id' => 'extractForm','valueSources' => $this->request->is('post') ? ['data'] : ['query']]) ?>
     <div class="tObox">
-        <p class="cuttitlebox">食材発注データ書出し</p>
+        <p class="cuttitlebox">単品食材発注データ書出し</p>
             
         <div class="search-box-wrapper">
             <div class="search-box">
@@ -58,12 +58,34 @@
                     </div>
                 </div>
                     <div class="search-row1">
+                        <label class="search-label">書出確定期間</label>
+                        <div class="date-range" style="display: flex; gap:0.5rem;">
+                            <?= $this->Form->control('export_confirm_date_from', [
+                                'label' => false,
+                                'type'  => 'date',
+                                'class' => 'start-date',
+                                'value' => $this->request->getQuery('export_confirm_date_from'),
+                            ]) ?>
+
+                            <div class="search-field" style="align-self: center; font-weight: bold; width: auto; min-width: unset;">
+                                〜
+                            </div>
+
+                            <?= $this->Form->control('export_confirm_date_to', [
+                                'label' => false,
+                                'type'  => 'date',
+                                'class' => 'end-date',
+                                'value' => $this->request->getQuery('export_confirm_date_to'),
+                            ]) ?>
+                        </div>
+                    </div>
+                    <div class="search-row1">
                         <label class="search-label">発注状態</label>
                         <?= $this->Form->control('order_status', [
                             'label' => false,
                             'type' => 'select',
                             'options' => ['0' => '未確定', '1' => '確定'],
-                            'empty' => 'すべて',
+                            'empty' => '未選択',
                         ]) ?>
 
                         <label class="search-label">施設名</label>
@@ -78,7 +100,7 @@
 
                 <div class="search-col" style="grid-column: 3; justify-self: end;">
                     <div class="search-field" style="max-width:120px;">
-                        <?= $this->Form->button('抽出') ?>
+                        <?= $this->Form->button('検索') ?>
                     </div>
                 </div>
             </div>
@@ -97,6 +119,8 @@
             <?= $this->Form->hidden('order_date_to', ['value' => $this->request->getQuery('order_date_to')]) ?>
             <?= $this->Form->hidden('deli_req_date_from', ['value' => $this->request->getQuery('deli_req_date_from')]) ?>
             <?= $this->Form->hidden('deli_req_date_to', ['value' => $this->request->getQuery('deli_req_date_to')]) ?>
+            <?= $this->Form->hidden('export_confirm_date_from', ['value' => $this->request->getQuery('export_confirm_date_from')]) ?>
+            <?= $this->Form->hidden('export_confirm_date_to', ['value' => $this->request->getQuery('export_confirm_date_to')]) ?>
             <?= $this->Form->hidden('order_status', ['value' => $this->request->getQuery('order_status')]) ?>
             <?= $this->Form->hidden('order_date', ['value' => $this->request->getQuery('order_date')]) ?>
             <?= $this->Form->hidden('user_id', ['value' => $this->request->getQuery('user_id')]) ?>

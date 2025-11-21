@@ -6,7 +6,7 @@
 ?>
 <div class="mDelivery index content">
     <div class="title_box">
-        <h2 class="title">配食商品一覧</h2>
+        <h2 class="title">献立商品マスタ</h2>
            <?= $this->element('show_deleted_filter') ?>
         <p class="title2">件数 <?= h($count) ?> 件</p>
     </div>
@@ -38,8 +38,8 @@
             <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 20px;">
                      <!-- 🔽 操作ボタン -->
                         <div class="leftbox">
-                        <?= $this->Form->button('追加', ['name' => 'action', 'value' => 'add']) ?>
-                        <?= $this->Form->button('更新', ['name' => 'action', 'value' => 'edit']) ?>
+                        <?= $this->Form->button('新規', ['name' => 'action', 'value' => 'add']) ?>
+                        <?= $this->Form->button('編集', ['name' => 'action', 'value' => 'edit']) ?>
                         <?= $this->Form->button('削除', [
                             'name' => 'action',
                             'value' => 'delete',

@@ -47,6 +47,11 @@ class MUserGroupTable extends AppTable
             'foreignKey' => 'user_group_id',
             'bindingKey' => 'user_group_id',
         ]);
+        
+        $this->belongsTo('MUsers', [
+            'foreignKey' => 'user_id',
+            'className'  => 'MUser',
+        ]);
     }
 
     /**

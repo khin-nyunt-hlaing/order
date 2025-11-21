@@ -41,7 +41,7 @@ class MUserTable extends AppTable
         $this->setDisplayField('user_id');
         $this->setPrimaryKey('user_id');
         
-          $this->belongsTo('MService', [
+        $this->belongsTo('MService', [
             'foreignKey' => 'use_service_id',
             'propertyName' => 'service',
             ]);
@@ -76,6 +76,12 @@ class MUserTable extends AppTable
             'className' => 'MDispUser',
             'foreignKey' => 'user_id'
         ]);
+
+        $this->hasMany('MUserGroups', [
+            'foreignKey' => 'user_id',
+            'className'  => 'MUserGroup'
+        ]);
+
 
     }
     
@@ -196,9 +202,9 @@ class MUserTable extends AppTable
             ->greaterThanOrEqual(
                 'read_time', $minLeadTime, "リードタイムは{$minLeadTime}日以上で入力してください");
 
-        $validator
-            ->requirePresence('user_group_id', 'create')               // ← セレクトの name に合わせる
-            ->notEmptyString('user_group_id', 'このフィールドを選択してください');
+        // $validator
+        //     ->requirePresence('user_group_id', 'create')               // ← セレクトの name に合わせる
+        //     ->notEmptyString('user_group_id', 'このフィールドを選択してください');
 
         $validator = parent::validationDefault($validator);
         return $validator;

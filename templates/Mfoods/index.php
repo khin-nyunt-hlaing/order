@@ -8,7 +8,7 @@
 
     
     <div class="title_box">
-    <h2 class="title">食材商品一覧</h2>
+    <h2 class="title">単品食材商品一覧</h2>
         
 <?= $this->Form->create(null, ['type' => 'post']) ?>
 <div class="deleted-filter">

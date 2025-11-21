@@ -85,6 +85,12 @@ class TFoodOrderFixTable extends AppTable
         $validator
             ->date('deli_shedule_date')
             ->allowEmptyDate('deli_shedule_date', 'このフィールドを入力してください。');
+        
+        $validator
+            ->date('deli_confirm_date')->allowEmptyDate('deli_confirm_date');
+        
+        $validator
+            ->date('export_confirm_date')->allowEmptyDate('export_confirm_date');
 
         $validator
             ->scalar('food_id')

@@ -130,6 +130,8 @@ class TFoodOrderController extends AppController
                     $odTo   = $q['order_date_to']      ?? null;
                     $drFrom = $q['deli_req_date_from'] ?? null;
                     $drTo   = $q['deli_req_date_to']   ?? null;
+                    $ecFrom = $q['export_confirm_date_from'] ?? null;
+                    $ecTo   = $q['export_confirm_date_to']   ?? null;
 
                     // ★ 上限日は当日終端に補正（datetime の想定。datetime2 なら .9999999）
                     $odToEnd = $odTo ? $odTo . ' 23:59:59.997' : null;
@@ -145,6 +147,8 @@ class TFoodOrderController extends AppController
                         'od_to'        => $odTo,
                         'dr_from'      => $drFrom,
                         'dr_to'        => $drTo,
+                        'ec_from'      => $ecFrom,
+                        'ec_to'        => $ecTo,
                     ];
 
                 // ▼ 一覧SQL（WHERE に $scopeWhere を差し込み、ORDER BY の前まで同じに）
@@ -154,6 +158,18 @@ class TFoodOrderController extends AppController
                             B.user_id,
                             CONVERT(VARCHAR(10), COALESCE(A.order_date,    B.order_date),    111) AS order_date,
                             CONVERT(VARCHAR(10), COALESCE(A.deli_req_date, B.deli_req_date), 111) AS deli_req_date,
+                            CONVERT(
+                                VARCHAR(10),
+                                COALESCE(A.deli_shedule_date, B.deli_shedule_date),
+                                111
+                            ) AS deli_shedule_date,
+                            
+                            CONVERT(VARCHAR(10), A.deli_confirm_date, 111) AS deli_confirm_date,
+                            CONVERT(
+                                VARCHAR(10),
+                                COALESCE(A.export_confirm_date, B.export_confirm_date),
+                                111
+                            ) AS export_confirm_date,
                             COALESCE(A.order_quantity,B.order_quantity)AS order_quantity,
                             COALESCE(A.order_status,  B.order_status)  AS order_status,
                             F.food_name,
@@ -180,9 +196,28 @@ class TFoodOrderController extends AppController
                             >= COALESCE(:dr_from, COALESCE(A.deli_req_date, B.deli_req_date))
                         AND COALESCE(A.deli_req_date, B.deli_req_date)
                             <= COALESCE(:dr_to,   COALESCE(A.deli_req_date, B.deli_req_date))
-                        ORDER BY COALESCE(A.order_date, B.order_date) DESC;
-                    ";
 
+                        
+                    ";
+                    // ▼ ★ 管理者だけ export_confirm_date 条件を追加（SQLの外で追加）
+                    if ((int)$level === 1) {
+
+                        if (!empty($ecFrom)) {
+                            $sql .= " AND COALESCE(A.export_confirm_date, B.export_confirm_date) >= :ec_from ";
+                            $sqlParams['ec_from'] = $ecFrom;
+                        }
+
+                        if (!empty($ecTo)) {
+                            $sql .= " AND COALESCE(A.export_confirm_date, B.export_confirm_date) <= :ec_to ";
+                            $sqlParams['ec_to'] = $ecTo;
+                        }
+
+                    } else {
+                        // 管理者以外はパラメータを削除
+                        unset($sqlParams['ec_from'], $sqlParams['ec_to']);
+                    }
+                    $sql .= " ORDER BY COALESCE(A.order_date, B.order_date) DESC";
+                    
                     // ▼ 件数SQL（TOP/ORDER BYなしで同じWHEREをコピペ）
                     $countSql = "
                         SELECT COUNT(1) AS cnt
@@ -207,7 +242,24 @@ class TFoodOrderController extends AppController
                             >= COALESCE(:dr_from, COALESCE(A.deli_req_date, B.deli_req_date))
                         AND COALESCE(A.deli_req_date, B.deli_req_date)
                             <= COALESCE(:dr_to,   COALESCE(A.deli_req_date, B.deli_req_date))
+                    
                     ";
+                    // ▼ countSql の export_confirm_date 条件（管理者だけ）
+                    if ((int)$level === 1) {
+
+                        if (!empty($ecFrom)) {
+                            $countSql .= " AND COALESCE(A.export_confirm_date, B.export_confirm_date) >= :ec_from ";
+                            $sqlParams['ec_from'] = $ecFrom;
+                        }
+
+                        if (!empty($ecTo)) {
+                            $countSql .= " AND COALESCE(A.export_confirm_date, B.export_confirm_date) <= :ec_to ";
+                            $sqlParams['ec_to'] = $ecTo;
+                        }
+
+                    } else {
+                        unset($sqlParams['ec_from'], $sqlParams['ec_to']);
+                    }
 
                     $connection = $this->fetchTable('TFoodOrder')->getConnection();
                     $userIdRaw = $q['user_id'] ?? null;
@@ -221,6 +273,8 @@ class TFoodOrderController extends AppController
                         'od_to'        => $odTo,
                         'dr_from'      => $drFrom,
                         'dr_to'        => $drTo,
+                        'ec_from'      => $ecFrom,
+                        'ec_to'        => $ecTo,
                     ]);
 
                     // 1) SQL中のプレースホルダだけを拾って bind を作る関数
@@ -375,29 +429,13 @@ class TFoodOrderController extends AppController
                     if ($selectcount === 1) {
                         $id = (int)$selectedIds[0];
 
-                        // モデルをロード（initializeでまとめてロードしておくのがベター）
-                        $this->fetchTable('TFoodOrder');
-
-                        $order = $this->TFoodOrder->find()
-                            ->select(['food_order_id', 'order_status'])
-                            ->where(['food_order_id' => $id])
-                            ->first();
-
-                        if (!$order) {
-                            $this->Flash->error('対象データが見つかりません。');
-                            return $this->redirect(['action' => 'index']);
-                        }
-
-                        if ((int)$order->order_status === 1) {
-                            log::debug("管理者更新");
-                            return $this->redirect(['action' => 'editmaster', $id]);
-                        } else {
-                            log::debug("更新");
-                            return $this->redirect(['action' => 'edit', $id]);
-                        }
+                        // ★ もう order_status 判定も、editmaster 遷移も不要
+                        // 1件だけ選択されていれば通常の edit に飛ばす
+                        return $this->redirect(['action' => 'edit', $id]);
 
                     } elseif ($selectcount === 0) {
                         $this->Flash->error('更新する項目を1つ選択してください。');
+
                     } else {
                         $this->Flash->error('更新は1件のみ選択可能です。');
                     }
@@ -413,10 +451,12 @@ class TFoodOrderController extends AppController
                     }
 
                     $targetStatus = ($action === 'confirm') ? 0 : 1;
+
                     $orders = $this->TFoodOrder->find()
                         ->where(['food_order_id IN' => $selectedIds])
                         ->all();
 
+                    // 混在チェック
                     $invalid = [];
                     foreach ($orders as $order) {
                         if ((int)$order->order_status !== $targetStatus) {
@@ -425,71 +465,90 @@ class TFoodOrderController extends AppController
                     }
 
                     if (!empty($invalid)) {
-                        $this->set('confirmError', $action); // 'confirm' or 'unconfirm'
+                        $this->set('confirmError', $action);
                         $this->set('selectedIds', $selectedIds);
-                        // ★再表示に必要な変数を渡す
                         $this->set(compact('tFoodOrder', 'count', 'users'));
-                        return; // 再表示
+                        return;
                     }
 
-                    // ★★★ 正常処理：状態変更のみ（確定テーブル処理はなし）
+                    // 正常処理
                     $loginUserId = $this->request->getAttribute('identity')->get('user_id') ?? 'system';
-                    $now = FrozenTime::now()->format('Y-m-d H:i:s');
-                    $conn = $this->TFoodOrder->getConnection();
-                    $status =  ($action === 'confirm') ? 1 : 0;
+                    $now = FrozenTime::now();  // ←★ ここで FrozenTime を統一
+                    $status = ($action === 'confirm') ? 1 : 0;
                     $TFoodOrderFixTable = $this->fetchTable('TFoodOrderFix');
 
-                    $conn->transactional(function () use ($orders, $action, $loginUserId, $now,$status,$TFoodOrderFixTable) {
-                        
-                        Log::debug('435:'.$status);
+                    $conn = $this->TFoodOrder->getConnection();
+
+                    $conn->transactional(function () use ($orders, $action, $loginUserId, $now, $status, $TFoodOrderFixTable) {
+
                         foreach ($orders as $order) {
-                            $order->order_status = ($action === 'confirm') ? 1 : 0;
+
+                            // --- T_FOOD_ORDER 更新 ---
                             $order->order_status = $status;
                             $order->update_user  = $loginUserId;
                             $order->update_date  = $now;
-                            // 失敗時は例外を投げてロールバック
+
+                            // 確定日
+                            $order->deli_confirm_date = ($action === 'confirm') ? $now : null;
+
                             if (!$this->TFoodOrder->save($order)) {
-                                throw new \RuntimeException('TFoodOrder の更新に失敗しました: ' . $order->food_order_id);
+                                throw new \RuntimeException('TFoodOrder 更新失敗: ' . $order->food_order_id);
                             }
+
+                            // --- T_FOOD_ORDER_FIX 更新 or 作成 ---
                             $linked = $TFoodOrderFixTable->find()
-                                ->where(['food_order_id' => $order->food_order_id,
-                                            'del_flg'       => 0,
-                                        ])
+                                ->where(['food_order_id' => $order->food_order_id])
                                 ->first();
 
-                            if($linked){
-                                $pacth =[
-                                    'order_status' => $status,
-                                    'update_user'  => $loginUserId,
-                                    'update_date'  => $now,
+                            if ($linked) {
+                                // 修正(Update)
+                                $patch = [
+                                    'order_status'      => $status,
+                                    'deli_confirm_date' => ($action === 'confirm') ? $now : null,
+                                    'update_user'       => $loginUserId,
+                                    'update_date'       => $now,
                                 ];
-                                // if (isset($pacth)) {
-                                    //     Log::debug('🔎 [DEBUG patchOrder 型] ' . gettype($pacth));
-                                    //     Log::debug('🔎 [DEBUG patchOrder キー一覧] ' . implode(', ', array_keys((array)$pacth)));
-                                    //     Log::debug('🔎 [DEBUG patchOrder 中身 dump]' . PHP_EOL . print_r($pacth, true));
-                                // }
 
-                                // ガード（数値キーが混じってないか）
-                                if (array_is_list($pacth)) {
-                                    Log::debug('[PATCH_KEYS TFoodOrder] ' . implode(',', array_keys($pacth)));
-                                    throw new \InvalidArgumentException('pacth に数値キーが混入しています');
-                                }
+                                $TFoodOrderFixTable->patchEntity($linked, $patch);
+                                $TFoodOrderFixTable->saveOrFail($linked);
 
-                                // 任意の確認ログ（一時）
-                                Log::debug('[PATCH_KEYS TFoodOrder] ' . implode(',', array_keys($pacth)));
+                            } else {
+                                // 新規 Insert
+                                $insertData = [
+                                    'food_order_id'      => $order->food_order_id,
+                                    'user_id'            => $order->user_id,
+                                    'order_date'         => $order->order_date,
+                                    'deli_req_date'      => $order->deli_req_date,
+                                    'deli_shedule_date'  => $order->deli_shedule_date,
+                                    'deli_confirm_date'  => ($action === 'confirm') ? $now : null,
+                                    'export_confirm_date'=> $order->export_confirm_date,
+                                    'food_id'            => $order->food_id,
+                                    'order_quantity'     => $order->order_quantity,
+                                    'order_status'       => $status,
+                                    'del_flg'            => 0,
+                                    'create_user'        => $loginUserId,
+                                    'create_date'        => $now,
+                                    'update_user'        => $loginUserId,
+                                    'update_date'        => $now,
+                                ];
 
-                                $TFoodOrderFixTable->patchEntity($linked,$pacth);
-
-                                if (!$TFoodOrderFixTable->save($linked)) {
-                                    throw new \RuntimeException('TFoodOrder の更新に失敗しました: ' . $order->food_order_id);
-                                }
+                                $linked = $TFoodOrderFixTable->newEmptyEntity();
+                                $linked = $TFoodOrderFixTable->patchEntity($linked, $insertData);
+                                $TFoodOrderFixTable->saveOrFail($linked);
                             }
                         }
                     });
 
-                    $msg = ($action === 'confirm') ? '確定しました。' : '確定を解除しました。';
-                    $this->Flash->success($msg);
-                    return $this->redirect(['action' => 'index']);
+                    // ★★★★★ ここに書く！！（トランザクションの外）★★★★★
+                if ($action === 'confirm') {
+                    $csvPath = $this->exportConfirmedOrders($selectedIds);
+                    $this->Flash->success("確定し、CSVを出力しました：$csvPath");
+                } else {
+                    $this->Flash->success("確定を解除しました。");
+                }
+                // ★★★★★ ここまで ★★★★★
+
+                return $this->redirect(['action' => 'index']);
                 }
                 if ($action === 'search') {
                     $this->request->allowMethod(['post']);
@@ -504,6 +563,8 @@ class TFoodOrderController extends AppController
                             'order_date_to'      => $d['order_date_to']      ?? null,
                             'deli_req_date_from' => $d['deli_req_date_from'] ?? null,
                             'deli_req_date_to'   => $d['deli_req_date_to']   ?? null,
+                            'export_confirm_date_from' => $d['export_confirm_date_from'] ?? null,
+                            'export_confirm_date_to'   => $d['export_confirm_date_to']   ?? null,
                         ];
                         $carry = array_filter($carry, fn($v) => $v !== '' && $v !== null);
 
@@ -687,6 +748,9 @@ class TFoodOrderController extends AppController
             $categoryId = null;
             $this->set(compact('TFoodOrder', 'userName', 'groupedFoods','categoryOptions','addDays','minDate','categoryId'));
             $this->set('mode', 'add');
+            $identity = $this->Authentication->getIdentity();
+            $useSvc = (int)$identity->get('use_service_id');
+            $this->set('useSvc', $useSvc);
             $this->render('add_edit');
         try{
             //データセット★
@@ -796,6 +860,7 @@ class TFoodOrderController extends AppController
      */
     public function edit($id = null)
     {
+        
         $TFoodOrder = $this->TFoodOrder->get($id);
         Log::debug("更新処理開始 - ID: {$id}");
         // Log::debug('食材発注のゲット:'.print_r($TFoodOrder,true));
@@ -856,13 +921,18 @@ class TFoodOrderController extends AppController
         try {
             if ($this->request->is(['patch', 'post', 'put'])) {
                 $data = $this->request->getData();
+                
 
                 // 納品希望日の空欄チェック（必須にするなら）
                 if (empty($data['deli_req_date'])) {
+                    
                     $this->Flash->error('納品希望日は必須です。');
                     // フォーム再表示
                     $this->set(compact('TFoodOrder', 'userName', 'groupedFoods', 'categoryOptions', 'specOptions', 'minDate', 'categoryId'));
                     $this->set('mode', 'edit');
+                    $identity = $this->Authentication->getIdentity();
+                    $useSvc = (int)$identity->get('use_service_id');
+                    $this->set('useSvc', $useSvc);
                     $this->render('add_edit');
                     return;
                 }
@@ -900,6 +970,9 @@ class TFoodOrderController extends AppController
                     // フォーム再表示
                     $this->set(/* 変数セット */);
                     $this->set('mode', 'edit');
+                    $identity = $this->Authentication->getIdentity();
+                    $useSvc = (int)$identity->get('use_service_id');
+                    $this->set('useSvc', $useSvc);
                     return $this->render('add_edit');
                 }
 
@@ -922,8 +995,95 @@ class TFoodOrderController extends AppController
         // ここでのrenderは初期表示や失敗時のみ
         $this->set(compact('TFoodOrder', 'userName', 'groupedFoods', 'categoryOptions', 'specOptions', 'minDate', 'categoryId'));
         $this->set('mode', 'edit');
+        $identity = $this->Authentication->getIdentity();
+        $useSvc = (int)$identity->get('use_service_id');
+        $this->set('useSvc', $useSvc);
         return $this->render('add_edit');
     }
+
+    // チェックした行の単品食材発注情報を確定し、同時にデータを書き出してダウンロードフォルダに保存。
+    private function exportConfirmedOrders(array $ids)
+    {
+        // POSTデータ取得
+        $query = $this->request->getData();
+
+        // ★ここで条件を作る（必須）
+        $conditions = ['TFoodOrder.del_flg' => 0];
+
+        if (!empty($query['order_date_from'])) {
+            $conditions['order_date >='] = $query['order_date_from'];
+        }
+        if (!empty($query['order_date_to'])) {
+            $conditions['order_date <='] = $query['order_date_to'];
+        }
+        if (!empty($query['deli_req_date_from'])) {
+            $conditions['deli_req_date >='] = $query['deli_req_date_from'];
+        }
+        if (!empty($query['deli_req_date_to'])) {
+            $conditions['deli_req_date <='] = $query['deli_req_date_to'];
+        }
+        if (isset($query['order_status']) && $query['order_status'] !== '') {
+            $conditions['order_status'] = $query['order_status'];
+        }
+        if (!empty($query['user_id'])) {
+            $conditions['TFoodOrder.user_id'] = $query['user_id'];
+        }
+       $orders = $this->TFoodOrder->find()
+                ->contain([
+                    'MUsers.MUserGroups',
+                    'MFoods.MFoodCategories'
+                    ]) // ここ追加
+                ->where($conditions)
+                ->order(['order_date' => 'ASC'])
+                ->all();
+
+        $csv = "単品食材発注ID,施設グループ番号,施設グループ名称,ユーザID(施設番号),施設名,発注日,納品希望日,コード番号,商品名,分類ID,分類名称,規格,発注数,発注状態\n";
+
+        foreach ($orders as $order) {
+            
+            $csv .= implode(',', [
+                    '="' . $order->food_order_id . '"',
+                    '="' . ($order->m_user->m_user_groups[0]->user_group_id ?? '') . '"',
+                    '="' . ($order->m_user->m_user_groups[0]->user_group_name ?? '') . '"',
+                    '="' . $order->user_id . '"',
+                    '="' . ($order->m_user->user_name ?? '') . '"',
+                    '="' . ($order->order_date ? $order->order_date->format('Y/m/d') : '') . '"',
+                    '="' . ($order->deli_req_date ? $order->deli_req_date->format('Y/m/d') : '') . '"',
+                    '="' . ($order->m_food?->m_food_category?->category_id ?? '') . '"',
+                    '="' . ($order->m_food?->m_food_category?->category_name ?? '') . '"',
+                    '="' . $order->food_id . '"',
+                    '="' . ($order->m_food?->food_name ?? '') . '"',
+                    '="' . ($order->m_food?->food_specification ?? '') . '"',
+                    '="' . $order->order_quantity . '"',
+                    '="' . ($order->order_status === "1" ? "確定" : "未確定") . '"',
+            ]) . "\n";
+        }
+
+        // 🔵 ← ここを固定（あなたの Windows のユーザー名を使用）
+        $downloads = "C:/Users/sonic/Downloads/";
+
+        if (!is_dir($downloads)) {
+            throw new \RuntimeException("Downloads フォルダが見つかりません: $downloads");
+        }
+
+        $fileName = date('Ymd') . '.csv';
+        $path = $downloads . $fileName;
+
+        file_put_contents($path, mb_convert_encoding($csv, 'SJIS-win', 'UTF-8'));
+        $now = FrozenTime::now();
+        $loginUserId = $this->request->getAttribute('identity')->get('user_id') ?? 'system';
+
+        // Aテーブル（t_food_order_fix）のみ更新
+        $TFix = $this->fetchTable('TFoodOrderFix');
+        $TFix->updateAll([
+            'export_confirm_date' => $now,
+            'update_user'         => $loginUserId,
+            'update_date'         => $now,
+        ], ['food_order_id IN' => $ids]);
+
+        return $path;
+    }
+
     public function export()
     {
         $query = $this->request->getQueryParams();
@@ -952,16 +1112,33 @@ class TFoodOrderController extends AppController
         if (!empty($query['deli_req_date_to'])) {
             $conditions['deli_req_date <='] = $query['deli_req_date_to'];
         }
+        // export_confirm_date_from
+        if (!empty($query['export_confirm_date_from'])) {
+            $conditions[] = [
+                'COALESCE(TFoodOrderFix.export_confirm_date, TFoodOrder.export_confirm_date) >=' 
+                    => $query['export_confirm_date_from']
+            ];
+        }
+
+        // export_confirm_date_to
+        if (!empty($query['export_confirm_date_to'])) {
+            $conditions[] = [
+                'COALESCE(TFoodOrderFix.export_confirm_date, TFoodOrder.export_confirm_date) <=' 
+                    => $query['export_confirm_date_to']
+            ];
+        }
+
         if (isset($query['order_status']) && $query['order_status'] !== '') {
             $conditions['order_status'] = $query['order_status'];
         }
         if (!empty($query['user_id'])) {
-            $conditions['user_id'] = $filterUserId;
+            $conditions['TFoodOrder.user_id'] = $filterUserId;
         }
 
             $orders = $this->TFoodOrder->find()
+                ->contain(['TFoodOrderFix'])
                 ->where($conditions)
-                ->order(['order_date' => 'ASC'])
+                ->order(['TFoodOrder.order_date' => 'ASC'])
                 ->all();
 
             $dataCount = $orders->count();
@@ -1013,37 +1190,52 @@ class TFoodOrderController extends AppController
             if (!empty($query['deli_req_date_to'])) {
                 $conditions['deli_req_date <='] = $query['deli_req_date_to'];
             }
+            if (!empty($query['export_confirm_date_from'])) {
+                $conditions['export_confirm_date >='] = $query['export_confirm_date_from'];
+            }
+
+            if (!empty($query['export_confirm_date_to'])) {
+                $conditions['export_confirm_date <='] = $query['export_confirm_date_to'];
+            }
             if (isset($query['order_status']) && $query['order_status'] !== '') {
                 $conditions['order_status'] = $query['order_status'];
             }
 
             
-            if (!empty($filterUserId)) {
-                $conditions['user_id'] = $filterUserId;
+            if (!empty($query['user_id'])) {
+                $conditions['TFoodOrder.user_id'] = $filterUserId;
             }
 
             $orders = $this->TFoodOrder->find()
-                ->contain(['MFoods.MFoodCategories']) // ここ追加
+                ->contain([
+                    'MUsers.MUserGroups',
+                    'MFoods.MFoodCategories'
+                    ]) // ここ追加
                 ->where($conditions)
                 ->order(['order_date' => 'ASC'])
                 ->all();
+            
 
             try {
             // BOM付きCSVを作成
-            $csv = "施設ID,発注日,納品希望日,食材分類コード,食材分類名,コード番号,商品名,規格,発注数,発注状態\n";
+            $csv = "単品食材発注ID,施設グループ番号,施設グループ名称,ユーザID(施設番号),施設名,発注日,納品希望日,コード番号,商品名,分類ID,分類名称,規格,発注数,発注状態\n";
             foreach ($orders as $order) {
                 $csv .= implode(',', [
-                    $order->user_id,
-                    $order->order_date ? $order->order_date->format('Y/m/d') : '',
-                    $order->deli_req_date ? $order->deli_req_date->format('Y/m/d') : '',
-                    $order->m_food?->m_food_category?->category_id ?? '',
-                    $order->m_food?->m_food_category?->category_name ?? '',
-                    $order->food_id,
-                    $order->m_food?->food_name ?? '',
-                    $order->m_food?->food_specification ?? '',
-                    $order->order_quantity,
-                    $order->order_status === '1' ? '確定' : '未確定'
-                ]) . "\n";
+                    '="' . $order->food_order_id . '"',
+                    '="' . ($order->m_user->m_user_groups[0]->user_group_id ?? '') . '"',
+                    '="' . ($order->m_user->m_user_groups[0]->user_group_name ?? '') . '"',
+                    '="' . $order->user_id . '"',
+                    '="' . ($order->m_user->user_name ?? '') . '"',
+                    '="' . ($order->order_date ? $order->order_date->format('Y/m/d') : '') . '"',
+                    '="' . ($order->deli_req_date ? $order->deli_req_date->format('Y/m/d') : '') . '"',
+                    '="' . ($order->m_food?->m_food_category?->category_id ?? '') . '"',
+                    '="' . ($order->m_food?->m_food_category?->category_name ?? '') . '"',
+                    '="' . $order->food_id . '"',
+                    '="' . ($order->m_food?->food_name ?? '') . '"',
+                    '="' . ($order->m_food?->food_specification ?? '') . '"',
+                    '="' . $order->order_quantity . '"',
+                    '="' . ($order->order_status === "1" ? "確定" : "未確定") . '"'
+                    ]) . "\n";
             }
 
             // ここでBOMを付加（Excel用）
@@ -1054,6 +1246,31 @@ class TFoodOrderController extends AppController
         $this->response = $this->response->withType('csv');
         $this->response = $this->response->withDownload($fileName);
         $this->response = $this->response->withStringBody($csvWithBom);
+
+        //書出し
+        $now = FrozenTime::now();
+        $loginUserId = $this->request->getAttribute('identity')->get('user_id') ?? 'system';
+
+        foreach ($orders as $order) {
+
+            if ($order->order_status == 1) {
+                // 確定済 → Fix
+                $this->fetchTable('TFoodOrderFix')->updateAll([
+                    'export_confirm_date' => $now,
+                    'update_user'         => $loginUserId,
+                    'update_date'         => $now,
+                ], ['food_order_id' => $order->food_order_id]);
+
+            } else {
+                // 未確定 → B
+                $this->TFoodOrder->updateAll([
+                    'export_confirm_date' => $now,
+                    'update_user'         => $loginUserId,
+                    'update_date'         => $now,
+                ], ['food_order_id' => $order->food_order_id]);
+            }
+        }
+        
 
             // 書き出し成功時、indexに遷移（※Flash後でもDLは成功する）
             return $this->response;
@@ -1179,6 +1396,7 @@ class TFoodOrderController extends AppController
                     ];
             $data = $postdata + $fromA;
             Log::debug('+fromA その後: ' . print_r($data, true));
+            $data['deli_shedule_date'] = $postdata['deli_shedule_date'];
             $data = array_merge($data, $extra); // 同じキーがあれば $extra 側で上書き
             
             
@@ -1222,7 +1440,9 @@ class TFoodOrderController extends AppController
 
             // 11) ビューへセット
             $this->set(compact('TFoodOrder', 'userName', 'groupedFoods', 'categoryOptions', 'specOptions', 'minDate', 'categoryId'));
-        
+            $identity = $this->Authentication->getIdentity();
+            $useSvc = (int)$identity->get('use_service_id');
+            $this->set('useSvc', $useSvc);
 
     }
 }

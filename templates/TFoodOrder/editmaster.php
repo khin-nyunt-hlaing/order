@@ -38,7 +38,9 @@
                     'readonly' => true,
                 ]) ?>
             </div>
-
+        
+        
+        
         <!-- 納品希望日-->
             <div class="input-range">
                 <div class="label-stack"><span>納品希望日</span></div>
@@ -51,19 +53,57 @@
                 ]) ?>
             </div>
 
-        <!-- 納品予定日-->
+        <?php if ($mode === 'edit' && $useSvc === 1): ?>
+         <!-- 納品予定日 -->
             <div class="input-range">
-            <div class="label-stack"><span>納品予定日</span></div>
-
-            <?= $this->Form->control('deli_shedule_date', [   // ← フィールド名は予定日専用に
-                'type'   => 'date',
-                'label'  => false,
-                'empty'  => true,
-                'error' => false,
-                'id'       => 'deli_shedule_date',
-                'min'   => $TFoodOrder->deli_req_date->i18nFormat('yyyy-MM-dd')
-            ]) ?>
+            <div class="label-stack">
+                <span>納品予定日</span>
             </div>
+
+            <?= $this->Form->control('deli_shedule_date', [
+                'type' => 'date',
+                'label' => false,
+                'min' => $minDate,
+                'value' => $deliReqDate ?? ($TFoodOrder->deli_shedule_date?->format('Y-m-d') ?? ''),
+                'readonly' => ($useSvc !== 1),  // ← 管理者以外は readonly
+                'class' => ($useSvc !== 1) ? 'readonly-gray' : '',
+            ]) ?>
+
+            <?= $this->Form->error('deli_shedule_date') ?>
+        </div>
+
+        <!-- 書出確定日-->
+            <div class="input-range">
+            <div class="label-stack">
+            <span>確定納品日</span>
+            </div>
+            <?= $this->Form->control('deli_confirm_date', [
+                    'type' => 'date',
+                    'label' => false,
+                    'id' => 'deli_confirm_date',
+                    'readonly' => true,
+                    'value'    => $TFoodOrder->deli_confirm_date
+                    ? $TFoodOrder->deli_confirm_date->format('Y-m-d'): '',
+                    'class'    => 'readonly-gray'
+                ]) ?>
+            </div>
+
+             <!-- 書出確定日-->
+            <div class="input-range">
+            <div class="label-stack">
+            <span>書出確定日</span>
+            </div>
+            <?= $this->Form->control('export_confirm_date', [
+                    'type' => 'date',
+                    'label' => false,
+                    'id' => 'export_confirm_date',
+                    'readonly' => true,
+                    'value'    => $TFoodOrder->export_confirm_date
+                    ? $TFoodOrder->export_confirm_date->format('Y-m-d'): '',
+                    'class'    => 'readonly-gray'
+                ]) ?>
+            </div>
+        <?php endif; ?>
 
         <!-- 食材分類 -->
             <div class="input-range">
