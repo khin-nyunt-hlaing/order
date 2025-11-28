@@ -4,13 +4,13 @@
     
 
     <div class="titlebox">
-            <p1><?= $mode === 'edit' ? '配食商品編集' : '配食商品登録' ?></p1> 
+            <p1><?= $mode === 'edit' ? '献立商品編集' : '献立商品登録' ?></p1> 
     </div>
     
 <div class="flex-vertical">
             <div class="input-range">
             <div class="label-stack">
-            <span>配食商品ID</span>
+            <span>献立商品ID</span>
             <span style="font-size: 1.5rem;">(必須)</span>
             </div>
             <?= $this->Form->control('delivery_id', [
@@ -67,7 +67,7 @@
 
         </div>
 <div class="mDeliveryBox">
-     <?= $this->Form->button($mode === 'edit' ? '更新' : '登録', ['id' => '', 'class' => 'akabtn-like']) ?>
+     <?= $this->Form->button($mode === 'edit' ? '編集' : '登録', ['id' => '', 'class' => 'akabtn-like']) ?>
      <a id="" href="<?= $this->Url->build(['action' => 'index']) ?>"
       class="aobtn-like" onclick="return confirm('遷移すると入力内容が破棄されます。よろしいですか？')">戻る</a>
      

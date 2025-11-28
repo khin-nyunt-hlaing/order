@@ -2,13 +2,13 @@
 <?= $this->Form->create($mDelivery, ['type' => 'file']) ?>
 
     <div class="titlebox">
-            <p1><?= $mode === 'edit' ? '配食商品編集' : '配食商品登録' ?></p1>
+            <p1><?= $mode === 'edit' ? '献立商品編集' : '献立商品登録' ?></p1>
     </div>
     
 <div class="flex-vertical">
             <div class="input-range">
             <div class="label-stack">
-            <span>配食商品ID</span>
+            <span>献立商品ID</span>
             <span style="font-size: 1.5rem;">(必須)</span>
             </div>
             <?= $this->Form->control('delivery_id', [

@@ -12,7 +12,7 @@
             <div class="input-range">
             <div class="label-stack">
             <span style="font-size:1.8rem; width:200px">配食商品パターン名称</span>
-            <span style="font-size: 1.5rem;">(必須)</span>
+            <!-- <span style="font-size: 1.5rem;">(必須)</span> -->
             </div>
             <?= $this->Form->control('delivery_pattern_name', [
                 'label' => false,
