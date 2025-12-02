@@ -108,7 +108,7 @@ $this->Form->setTemplates([
 
                     <td class="col-2"><?= h($pattern->use_pattern_id) ?></td>
                     <td class="col-2"><?= h($pattern->delivery_pattern_name) ?></td>
-                    <td class="col-2"><?= $pattern->del_flg == 1 ? '削除' : '' ?></td>
+                    <td class="col-2"><?= $pattern->del_flg == 1 ? '✓' : '' ?></td>
                     <td class="col-3"><?= h($pattern->disp_no) ?></td>
                 </tr>
             <?php endforeach; ?>

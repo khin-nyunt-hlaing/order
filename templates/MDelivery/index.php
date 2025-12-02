@@ -103,7 +103,7 @@ $this->Form->setTemplates([
 
                     <td class="col-2"><?= h($m->delivery_id) ?></td>
                     <td class="col-2"><?= h($m->delivery_name) ?></td>
-                    <td class="col-2"><?= $m->del_flg == 1 ? '削除' : '' ?></td>
+                    <td class="col-2"><?= $m->del_flg == 1 ? '✓' : '' ?></td>
                     <td class="col-3"><?= $m->del_flg == 1 ? '999' : h($m->disp_no) ?></td>
                 </tr>
             <?php endforeach; ?>

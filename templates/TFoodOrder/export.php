@@ -1,282 +1,227 @@
 <?php
 /**
  * @var \App\View\AppView $this
- * @var iterable<\App\Model\Entity\MDelivery> $mDelivery
- * @var int $count
- * @var string|null $deliveryId
- * @var string|null $deliveryName
- * @var bool $includeDeleted
+ * @var iterable<\App\Model\Entity\TFoodOrder> $tFoodOrder
+ * @var array $query
+ * @var array $users
+ * @var int $dataCount
  */
-
-$this->Form->setTemplates([
-    'inputContainer' => '{{content}}',
-]);
 ?>
+<div class="TFoodOrder index content">
 
-<div class="mDelivery index content">
-
-    <div class="title_box">
-        <h2 class="title">献立商品マスタ</h2>
-        <?= $this->element('show_deleted_filter') ?>
-    </div>
-
-    <?= $this->Form->create(null, ['type' => 'get', 'url' => ['action' => 'index']]) ?>
-
-    <!-- 検索ボックス（枠あり・中身左寄せ） -->
-     <div class="search-box-perfect">
-
-        <!-- 検索フィールド全体の中身（IDと名称の入力フィールド群） -->
-         <div class="search-inner-fields">
+<!-- 🔍 抽出フォーム -->
+ <?= $this->Form->create(null, ['type' => 'get', 'class' => 'search-form','id' => 'extractForm','valueSources' => $this->request->is('post') ? ['data'] : ['query']]) ?>
+    <div class="tObox">
+        <p class="cuttitlebox">単品食材発注データ書出し</p>
             
-            <!-- S-1：献立商品IDの行 (横並び構造を統一) -->
-             <div class="line-wrap-id">
-                <label class="label-text-id">献立商品ID(完全一致)</label>
-                
-                <!-- ID入力フィールド -->
-                 <div class="input-wrap">
-                    <?= $this->Form->text('delivery_id', [
-                        'value' => $deliveryId,
-                        'class' => 'input-box' // input-box-id から input-box に変更
-                    ]) ?>
-                </div>
-            </div>
+        <div class="search-box-wrapper">
+            <div class="search-box">
+                <div class="search-row0">
 
-            <!-- S-2：商品名称の行 (横並び) -->
-            <div class="line-wrap-name">
-                <label class="label-text-name">商品名称(部分一致)</label>
-                
-                <!-- 名称入力フィールド -->
-                <div class="input-wrap">
-                    <?= $this->Form->text('delivery_name', [
-                        'value' => $deliveryName,
-                        'class' => 'input-box' // input-box-name から input-box に変更
-                    ]) ?>
+                    <div class="search-row1">
+                        <label class="search-label">発注日</label>
+                        <div class="date-range" style="display: flex; gap:0.5rem;">
+                        <?= $this->Form->control('order_date_from', [
+                            'label' => false,
+                            'type' => 'date',
+                            'class' => 'start-date',
+                        ]) ?>
+
+                        <div class="search-field" style="align-self: center; font-weight: bold; width: auto; min-width: unset;">
+                            〜
+                        </div>
+
+                        <?= $this->Form->control('order_date_to', [
+                            'label' => false,
+                            'type' => 'date',
+                            'class' => 'end-date',
+                        ]) ?>
+                        </div>
+
+                        <label class="search-label">納品希望日</label>
+                        <div class="date-range" style="display: flex; gap:0.5rem;">
+                        <?= $this->Form->control('deli_req_date_from', [
+                            'label' => false,
+                            'type' => 'date',
+                            'class' => 'start-date',
+                        ]) ?>
+
+                        <div class="search-field" style="align-self: center; font-weight: bold; width: auto; min-width: unset;">
+                            〜
+                        </div>
+
+                        <?= $this->Form->control('deli_req_date_to', [
+                            'label' => false,
+                            'type' => 'date',
+                            'class' => 'end-date',
+                        ]) ?>
+                    </div>
+                </div>
+                    <div class="search-row1">
+                        <label class="search-label">書出確定期間</label>
+                        <div class="date-range" style="display: flex; gap:0.5rem;">
+                            <?= $this->Form->control('export_confirm_date_from', [
+                                'label' => false,
+                                'type'  => 'date',
+                                'class' => 'start-date',
+                                'value' => $this->request->getQuery('export_confirm_date_from'),
+                            ]) ?>
+
+                            <div class="search-field" style="align-self: center; font-weight: bold; width: auto; min-width: unset;">
+                                〜
+                            </div>
+
+                            <?= $this->Form->control('export_confirm_date_to', [
+                                'label' => false,
+                                'type'  => 'date',
+                                'class' => 'end-date',
+                                'value' => $this->request->getQuery('export_confirm_date_to'),
+                            ]) ?>
+                        </div>
+                    </div>
+                    <div class="search-row1">
+                        <label class="search-label">発注状態</label>
+                        <?= $this->Form->control('order_status', [
+                            'label' => false,
+                            'type' => 'select',
+                            'options' => ['0' => '未確定', '1' => '確定'],
+                            'empty' => '未選択',
+                        ]) ?>
+
+                        <label class="search-label">施設名</label>
+                        <?= $this->Form->control('user_id', [
+                            'label' => false,
+                            'type' => 'select',
+                            'options' => $users,
+                            'empty' => 'すべて',
+                        ]) ?>
+                    </div>
+                </div>
+
+                <div class="search-col" style="grid-column: 3; justify-self: end;">
+                    <div class="search-field" style="max-width:120px;">
+                        <?= $this->Form->button('検索') ?>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <!-- S-3：検索ボタンをフィールドの右隣に縦方向で配置 -->
-          <div class="search-button-area">
-              <?= $this->Form->button('検索', [
-                  'type' => 'submit',
-                  'class' => 'search-button akabtn-like' // スタイルをTFoodOrderに合わせるためにクラスを追加
-              ]) ?>
-          </div>
+            <p style="margin: 0 auto 0 auto; text-align: right; color: red; font-weight: bold; width:90%; center:auto;">
+                <?= h($dataCount) ?>件が抽出されました
+            </p>
         
-    </div>
-
     <?= $this->Form->end() ?>
-    <?= $this->Form->create(null, ['type' => 'post']) ?>
-    <div class="scrollbox">
-        <table class="styled-table">
-            <thead>
-                <tr>
-                    <th>選択</th>
-                    <th><?= $this->Paginator->sort('delivery_id', '献立商品ID') ?></th>
-                    <th><?= $this->Paginator->sort('delivery_name', '商品名称') ?></th>
-                    <th>削除</th>
-                    <th><?= $this->Paginator->sort('disp_no', '表示順') ?></th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php foreach ($mDelivery as $m): ?>
-                <tr>
-                    <!-- 構文エラーを修正：閉じタグ ?> を追加 -->
-                    <td><?= $this->Form->checkbox("select[{$m->delivery_id}]", ['class' => 'row-check']) ?></td>
-                    <td><?= h($m->delivery_id) ?></td>
-                    <td><?= h($m->delivery_name) ?></td>
-                    <td><?= $m->deleted_at ? '削除' : '' ?></td>
-                    <td><?= $m->deleted_at ? '999' : ($m->disp_no ?? '') ?></td>
-                </tr>
-                <?php endforeach; ?>
-            </tbody>
-        </table>
-    </div>
 
-    <div class="operation-buttons">
-        <div class="leftbox">
-            <?= $this->Form->button('新規', ['name' => 'action', 'value' => 'add']) ?>
-            <?= $this->Form->button('編集', ['name' => 'action', 'value' => 'edit']) ?>
-            <?= $this->Form->button('削除', [
-                'name' => 'action',
-                'value' => 'delete',
-                'onclick' => 'return checkBeforeDelete();'
+    <div class="tObox">
+        <span>出力先</span>
+    <?= $this->Form->create(null, ['type' => 'post', 'url' => ['action' => 'export']]) ?>
+            <?= $this->Form->hidden('order_date_from', ['value' => $this->request->getQuery('order_date_from')]) ?>
+            <?= $this->Form->hidden('order_date_to', ['value' => $this->request->getQuery('order_date_to')]) ?>
+            <?= $this->Form->hidden('deli_req_date_from', ['value' => $this->request->getQuery('deli_req_date_from')]) ?>
+            <?= $this->Form->hidden('deli_req_date_to', ['value' => $this->request->getQuery('deli_req_date_to')]) ?>
+            <?= $this->Form->hidden('export_confirm_date_from', ['value' => $this->request->getQuery('export_confirm_date_from')]) ?>
+            <?= $this->Form->hidden('export_confirm_date_to', ['value' => $this->request->getQuery('export_confirm_date_to')]) ?>
+            <?= $this->Form->hidden('order_status', ['value' => $this->request->getQuery('order_status')]) ?>
+            <?= $this->Form->hidden('order_date', ['value' => $this->request->getQuery('order_date')]) ?>
+            <?= $this->Form->hidden('user_id', ['value' => $this->request->getQuery('user_id')]) ?>
+
+        <div class="child-box">
+            <p style="width:  10%; text-align: right;">ファイル名</p>
+            <?= $this->Form->control('export_file_name', [
+                'label'=> false,
+                'type' => 'text'
             ]) ?>
         </div>
-        <?= $this->Form->end() ?>
 
-        <div class="rightbox">
-            <?= $this->Html->link('戻る', ['controller' => 'Mmenus', 'action' => 'index'], ['class' => 'button']) ?>
+        <div class="TFoodOrderBox">
+            <?= $this->Form->button('書出し', [
+                'id' => '',
+                'class' => 'akabtn-like',
+                'disabled' => (empty($dataCount) || $dataCount < 1)
+            ]) ?>
+            <a id="" href="<?= $this->Url->build(['action' => 'index']) ?>" class="aobtn-like">戻る</a>
+            </div>
         </div>
-    </div>
-
+    <?= $this->Form->end() ?>
 </div>
-
+          
 <style>
-/* ------------------ 共通スタイル ------------------ */
-.input input, .input select, .input textarea, .input-box {
-    margin-bottom: 0 !important;
-}
-.akabtn-like {
-    /* TFoodOrderの「書出し」ボタンのスタイルを流用 */
-    background-color: #d9534f;
-    color: white;
-    border: 1px solid #d43f3a;
-    border-radius: 4px;
-    cursor: pointer;
-    box-shadow: 0 2px 2px rgba(0,0,0,0.1);
-    transition: background-color 0.2s;
-    text-decoration: none; /* <a>タグの場合に備えて */
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 6px 12px;
-    font-size: 16px;
-    height: 35px;
-}
-.akabtn-like:hover {
-    background-color: #c9302c; 
-}
-
-
-/* ------------------ タイトル ------------------ */
-.title_box {
+    .search-box {
     display: flex;
-    justify-content: space-between; 
-    align-items: flex-start;
-    margin-bottom: 5px;
-}
-.title_box .title { margin-right: 20px; }
-
-/* 件数表示の位置調整 */
-.title_box .title2 { 
-    margin-top: 5px; 
-    font-size: 14px;
-}
-
-/* ------------------ 検索ボックス（枠）------------------ */
-.search-box-perfect {
-    display: flex;
-    /* align-items: center; を align-items: flex-end; に変更してボタンを一番下に配置 */
-    align-items: flex-end;
-    flex-wrap: nowrap;
-    gap: 2rem; /* フィールド群とボタンの間隔 */
+    justify-content: space-between;
+    gap: 0.5rem;
     padding: 1rem;
     background: #fff;
     border: 1.5px solid #ccc;
     border-radius: 0.4rem;
-    flex: 1 1 auto;
-    min-width: 0;
-    max-width: none;
-    margin: 0 auto 20px auto; 
-    /* TFoodOrderの検索ボックスのように左寄せにするため、max-widthを指定 */
-    max-width: 600px;
-    margin-left: 0; 
-}
+    }
 
-/* 検索フィールド全体の中身（IDと名称の入力フィールド群） */
-.search-inner-fields {
-    display: flex;
-    flex-direction: column; /* 要素を縦に並べる */
-    gap: 15px; /* 行間の調整 */
-    flex-grow: 1; /* 親に合わせて拡張 */
-    /* width: 250px; 以前の固定幅を削除 */
-    margin-left: 0; /* 以前の 100px のマージンを削除 */
-}
-
-
-/* ------------------ 検索フィールド行 ------------------ */
-
-.line-wrap-id,
-.line-wrap-name {
-    /* ラベルと入力欄を縦に並べるためのコンテナ */
+    /* 左側：縦2段のブロック */
+    .search-row0 {
     display: flex;
     flex-direction: column;
-    width: 100%; /* 親に合わせて幅を確保 */
-    max-width: 250px; /* 必要に応じて最大幅を設定 */
-}
-
-.label-text-id,
-.label-text-name {
-    display: block;
-    font-size: 15px;
-    margin-bottom: 5px; /* ラベルと入力ボックスの間隔を調整 */
-    text-align: left; /* ラベルを左揃えにする */
-    font-weight: normal; /* TFoodOrderに合わせる */
-}
-
-/* 入力枠のラッパー（構造の統一のために残す） */
-.input-wrap {
-    display: flex;
-    align-items: center; 
-    gap: 15px; 
-}
-
-/* テキスト入力枠 (IDと名称で共通の幅) */
-.input-box {
-    width: 250px; /* ラベル+入力欄として十分な幅 */
-    height: 35px; 
-    border: 1px solid #aaa;
-    padding: 3px 6px;
-    font-size: 14px;
-    flex-grow: 1; /* 可能な限り幅を広げる */
-}
-
-/* ------------------ 検索ボタン ------------------ */
-
-/* 検索ボタンのエリア */
-.search-button-area {
-    /* ボタンを縦方向の最下部（align-items: flex-end;）に配置するために、
-       特別な設定は不要だが、将来的な拡張性を考えて残す。 */
-    height: 35px; /* ボタンの高さに合わせる（align-items: flex-end; のため不要だが安全策として）*/
-    flex-shrink: 0; /* 縮まないようにする */
-}
-
-.search-button {
-    width: 80px; 
-    height: 35px; 
-    font-size: 16px;
-    /* akabtn-like クラスのスタイルを適用 */
-}
-/* 以前の赤系スタイルを akabtn-like に移行 */
-/* .search-button:hover {
-    background-color: #c9302c; 
-} */
-
-
-/* ------------------ 一覧 ------------------ */
-.scrollbox { overflow-x: auto; }
-.operation-buttons {
-    display: flex;
-    justify-content: space-between;
-    margin-top: 20px;
-}
-.leftbox { display: flex; gap: 10px; }
-.highlight-row { background-color: #d0ebff; }
-</style>
-<script>
-    // 削除ボタン押下時の確認ダイアログ（元コードの onclick に対応）
-    function checkBeforeDelete() {
-        // 少なくとも一つのチェックボックスが選択されているか確認
-        const checkboxes = document.querySelectorAll('.row-check');
-        let checked = false;
-        checkboxes.forEach(chk => {
-            if (chk.checked) {
-                checked = true;
-            }
-        });
-
-        if (!checked) {
-            // アラートの代わりにカスタムモーダル表示を推奨しますが、
-            // 既存のコードの動作に近づけるため、メッセージをコンソールに出力します。
-            console.error('削除対象が選択されていません。');
-            return false; // 送信をキャンセル
-        }
-        
-        // 実際のアプリケーションでは、window.confirm() の代わりにカスタムモーダルを使用してください
-        // return window.confirm('選択されたデータを削除します。よろしいですか？');
-        
-        // 仮に常に true を返すことで処理を続行（**実際の環境ではカスタムモーダルが必要**）
-        return true; 
+    gap: 1.5rem;
+    max-width: 900px;
     }
+    .input input, .input select, .input textarea {
+        margin-bottom: 0 !important;
+    }
+
+        /* 各行：横に並べる（折り返さない） */
+        .search-row1 {
+        display: flex;
+        flex-wrap: nowrap;
+        gap: 1rem;
+        align-items: center;
+        width: 100%;
+        margin: 0 auto;
+    }
+
+        /* 中のフォーム */
+        .search-field {
+            min-width: 0 !important;
+            max-width: 180px !important; /* ← 例：親に合わせて広がる */
+            flex: 1;         /* ← 可能であれば柔軟拡張 */
+            box-sizing: border-box;
+    }
+    
+    .parent-box {
+    width: auto; height: auto;
+    min-width: 200px; max-width: 600px;
+    min-height: 100px; max-height: 400px; margin-left: 5%;
+    display: flex;
+    flex-direction: column; /* 子1・子2を縦に */
+    gap: 10px;
+    }
+
+    .child-box {
+    display: flex;           /* 中の要素を横に */
+    flex-direction: row;
+    gap: 10px;
+    align-items: center;
+    }
+    .TFoodOrderBox{
+    display: flex;
+    gap: 20px;
+    padding-right:5%;
+    justify-content: flex-end;
+    margin-left: auto; /* これが右寄せのポイント */
+    }
+      .search-label{
+    display: inline-block;
+    width: 100px;        /* ← 横幅固定 */
+    text-align: right;   /* ← 右詰め */
+    font-weight: normal; /* ← 太字解除（必要に応じて） */
+  }
+    .search-box .input{
+      display: block;
+      min-width: 120px !important;
+      margin: 0 !important;
+  }
+</style>
+  <script>
+    document.getElementById('fileInput').addEventListener('change', function() {
+    const fullPath = this.value;
+    document.getElementById('filePath').value = fullPath;
+    });
 </script>

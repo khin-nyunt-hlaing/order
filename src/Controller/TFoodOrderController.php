@@ -541,12 +541,12 @@ class TFoodOrderController extends AppController
 
                     // ★★★★★ ここに書く！！（トランザクションの外）★★★★★
                 if ($action === 'confirm') {
-                    $csvPath = $this->exportConfirmedOrders($selectedIds);
-                    $this->Flash->success("確定し、CSVを出力しました：$csvPath");
+                    // $csvPath = $this->exportConfirmedOrders($selectedIds);
+                    $this->Flash->success("確定しました。");
                 } else {
                     $this->Flash->success("確定を解除しました。");
                 }
-                // ★★★★★ ここまで ★★★★★
+              
 
                 return $this->redirect(['action' => 'index']);
                 }
