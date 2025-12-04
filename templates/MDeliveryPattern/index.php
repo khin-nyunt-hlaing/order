@@ -92,7 +92,7 @@ $this->Form->setTemplates([
             <thead>
                 <tr>
                     <th class="col-1">選択</th>
-                    <th class="col-2"><?= $this->Paginator->sort('use_pattern_id', '商品献立パターンID') ?></th>
+                    <th class="col-2"><?= $this->Paginator->sort('use_pattern_id', '献立パターンID') ?></th>
                     <th class="col-2"><?= $this->Paginator->sort('delivery_pattern_name', 'パターン') ?></th>
                     <th class="col-2"><?= $this->Paginator->sort('del_flg', '削除') ?></th>
                     <th class="col-3"><?= $this->Paginator->sort('disp_no', '表示順') ?></th>
