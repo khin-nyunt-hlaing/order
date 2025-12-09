@@ -107,13 +107,13 @@ class MTermTable extends AppTable
             ->date('entry_start_date')
             ->allowEmptyDate('entry_start_date', 'このフィールドを入力してください。');
 
-        $validator
-            ->date('add_deadline_date')
-            ->allowEmptyDate('add_deadline_date', 'このフィールドを入力してください。');
+        // $validator
+        //     ->date('add_deadline_date')
+        //     ->allowEmptyDate('add_deadline_date', 'このフィールドを入力してください。');
 
-        $validator
-            ->dateTime('upd_deadline_date')
-            ->allowEmptyDateTime('upd_deadline_date', 'このフィールドを入力してください。');
+        // $validator
+        //     ->dateTime('upd_deadline_date')
+        //     ->allowEmptyDateTime('upd_deadline_date', 'このフィールドを入力してください。');
 
         
         return $validator;
