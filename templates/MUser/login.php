@@ -40,7 +40,7 @@
         </div>
         <div class="Rightbox">
             <div class="Rightinbox">
-                <button type="button" onclick="clearForm()" class="loginclear">クリア</button>
+                <!-- <button type="button" onclick="clearForm()" class="loginclear">クリア</button> -->
                 <!-- <input type="submit" value="ログイン" class="loginpost"> -->
                 <!-- <a href="<?= $this->Url->build(['controller' => 'Mmenus', 'action' => 'index']) ?>" class="btn-like">ログイン</a> -->
                  <?= $this->Form->button('ログイン', ['class' => 'loginpost']) ?>
