@@ -2,73 +2,97 @@
 /**
  * @var \App\View\AppView $this
  * @var iterable<\App\Model\Entity\MUser> $mUser
- */?>
+ */
+?>
 <div class="MUser index content">
 
 <div class="title_box">
     <h2 class="title">施設一覧</h2>
-    <?= $this->element('show_deleted_filter') ?>
 </div>
 
 <div class="search-box-wrapper">
-  <?= $this->Form->create(null, ['type' => 'post', 'class' => 'search-form']) ?>
+<?= $this->Form->create(null, ['type' => 'post']) ?>
+<?php $this->Form->setTemplates(['inputContainer' => '{{content}}']); ?>
 
-  <div class="search-box">
-    <!-- 縦列1：A + B -->
-    <div class="search-col">
-      <div class="search-field"><?= $this->Form->control('user_id', [
-        'label' => '施設番号(完全一致)', 
-        'type' => 'text',
-        'value' => $userId]) ?>
-        </div> 
-      <div class="search-field"><?= $this->Form->control('user_name', [
-        'label' => '施設名(部分一致)',
-        'type' => 'text',
-        'value' => $userName]) ?>
-        </div> 
+<div class="search-box">
+
+    <!-- 上段チェックボックス -->
+    <div class="check-top">
+        <label>
+            <?= $this->Form->checkbox('include_menu_service', [
+                'checked' => !empty($this->request->getData('include_menu_service'))
+            ]) ?>
+            献立サービスを含む
+        </label>
+
+        <label>
+            <?= $this->Form->checkbox('include_food_service', [
+                'checked' => !empty($this->request->getData('include_food_service'))
+            ]) ?>
+            単品食材サービスを含む
+        </label>
     </div>
 
-    <!-- 縦列2：C + D -->
-    <div class="search-col">
-        <!-- 発注サービス -->
-        <!-- C -->
-            <div class="search-field">
-                    <?= $this->Form->control('use_service_id', [
-                        'label' => '発注サービス',
-                        'type' => 'select',
-                        'options' => $serviceList ?? [],
-                        'empty' => 'すべて',
-                        'value' => $serviceId ?? '',
-                    ]) ?>
-            </div>
-    
-        <!-- 利用状態 -->
-        <!-- D -->
-            <div class="search-field">
-                    <?= $this->Form->control('status', [
-                        'label' => '利用状態',
-                        'type' => 'select',
-                        'options' => $statusList,
-                        'empty' => false,
-                        'default' => 'すべて',
-                    ]) ?>
-            </div>
+    <!-- 1段目 -->
+    <div class="row-line">
+        <div class="left-col">
+            <label class="form-label"><span>施設グループ</span></label>
+            <?= $this->Form->select('user_group_id', $groupList, [
+                'empty' => '選択してください',
+                'value' => $userGroupId
+            ]) ?>
+        </div>
+
+        <div class="right-col">
+            <label class="form-label"><span>施設番号</span></label>
+            <?= $this->Form->text('user_id', ['value' => $userId]) ?>
+            <span class="note">(完全一致)</span>
+        </div>
     </div>
 
-    <!-- 縦列3：E + 抽出 -->
-    <div class="search-col">
-      <div class="search-field"><?= $this->Form->control('user_group_id', [
-          'label' => '施設グループ',
-          'type' => 'select',
-          'options' => $groupList ?? [],
-          'empty' => '選択してください',
-          'value' => $userGroupId ?? '',
-      ]) ?></div> <!-- E -->
-      <div class="search-field"><?= $this->Form->submit('抽出') ?></div>
-   
-  </div>
-  <?= $this->Form->end() ?>
+    <!-- 2段目 -->
+    <div class="row-line">
+        <div class="left-col">
+            <label class="form-label"><span>施設名称</span></label>
+            <?= $this->Form->text('user_name', ['value' => $userName]) ?>
+            <span class="note">(部分一致)</span>
+        </div>
+
+        <div class="right-col state-area">
+            <label>
+                <?= $this->Form->checkbox('status[]', [
+                    'value'   => '1',
+                    'hiddenField' => false,
+                    'checked' => in_array('1', $status, true)
+                ]) ?>
+                利用中
+            </label>
+
+            <label>
+                <?= $this->Form->checkbox('status[]', [
+                    'value'   => '0',
+                    'hiddenField' => false,
+                    'checked' => in_array('0', $status, true)
+                ]) ?>
+                準備中
+            </label>
+
+            <label>
+                <?= $this->Form->checkbox('status[]', [
+                    'value'   => '2',
+                    'hiddenField' => false,
+                    'checked' => in_array('2', $status, true)
+                ]) ?>
+                取引停止
+            </label>
+
+            <?= $this->Form->submit('検索', ['class' => 'search-btn']) ?>
+        </div>
+    </div>
+
 </div>
+
+<?= $this->Form->end() ?>
 </div>
 <p class="count-right">件数 <?= h($count) ?> 件</p>
 
@@ -82,38 +106,56 @@
                 <th>選択</th>
                 <th>施設番号</th>
                 <th>施設名称</th>
+                <th>施設グループCD</th>
+                <th>施設グループ名</th>
                 <th>発注サービス</th>
                 <th>状態</th>
             </tr>
         </thead>
         <tbody>
-            <?php foreach ($mUser as $user): ?>
-                    <?php if (!in_array($user->status, [0, 1, 2])) continue; ?>
+        <?php foreach ($mUser as $user): ?>
+            <?php if (!in_array($user->status, [0, 1, 2])) continue; ?>
+
             <tr>
                 <td>
                     <?= $this->Form->control("select[{$user->user_id}]", [
-                           'type' => 'checkbox',
-                           'label' => false,
-                           'class' => 'toggle-color',
-                       ]) ?>
+                        'type' => 'checkbox',
+                        'label' => false,
+                        'class' => 'toggle-color',
+                    ]) ?>
                 </td>
-                <td><?= h($user->user_id) ?></td>
+
+                <!-- 施設番号 -->
+                <td>
+                    <?= $this->Html->link(
+                        h($user->user_id),
+                        ['action' => 'edit', $user->user_id],
+                        ['class' => 'user-id-link']
+                    ) ?>
+                </td>
+
+                <!-- 施設名称 -->
                 <td><?= h($user->user_name) ?></td>
+
+                <!-- 施設グループCD -->
+                <td><?= h($user->user_group_id) ?></td>
+
+                <!-- 施設グループ名 -->
+                <td><?= h($user->user_group_name) ?></td>
+
+                <!-- 発注サービス -->
                 <td><?= h($user->service->service_name ?? '未設定') ?></td>
 
-        <td>
-            <?php if ($user->status == 0): ?>
-                準備中
-            <?php elseif ($user->status == 1): ?>
-                利用中
-            <?php elseif ($user->status == 2): ?>
-                取引停止    
-            <?php endif; ?>
-        </td>
-                
+                <!-- 状態 -->
+                <td>
+                    <?php if ($user->status == 0): ?>準備中
+                    <?php elseif ($user->status == 1): ?>利用中
+                    <?php elseif ($user->status == 2): ?>取引停止
+                    <?php endif; ?>
+                </td>
             </tr>
-            <?php endforeach; ?>
-                    
+
+        <?php endforeach; ?>
         </tbody>
     </table>
     </div>
@@ -122,13 +164,13 @@
 
     <!-- 操作ボタン -->
     <div class="leftbox">
-    <?= $this->Form->button('追加', ['name' => 'action', 'value' => 'add']) ?>
-    <?= $this->Form->button('更新', ['name' => 'action', 'value' => 'edit']) ?>
-    <?= $this->Form->button('削除', [
+    <?= $this->Form->button('新規', ['name' => 'action', 'value' => 'add']) ?>
+    <!-- <?= $this->Form->button('編集', ['name' => 'action', 'value' => 'edit']) ?> -->
+    <!-- <?= $this->Form->button('削除', [
             'name' => 'action',
             'value' => 'delete',
             'onclick' => 'return checkBeforeDelete();'
-        ]) ?>   
+        ]) ?>    -->
     </div>
     <!--戻るリンク -->
     <div class="rightbox">
@@ -142,61 +184,150 @@
 
 
 <style>
-    
-    .MUser.index.content{
-        max-height:100%;
-    }
-    .inbox{
-        margin-bottom: 0;
-        
-    }
-    .intable {
-    width: 95%;              /* 幅90%で調整 */
+.MUser.index.content{
+    max-height:100%;
+}
+
+.inbox{
+    margin-bottom: 0;
+}
+
+.intable {
+    width: 95%;
     border-collapse: collapse;
 }
-    td, th {
-        border: 1px solid #ccc;
+
+td, th {
+    border: 1px solid #ccc;
     padding: 8px;
     text-align: left;
-    height: 40px; /* 行の高さ固定 */
+    height: 40px;
 }
+
 .intable th {
     background-color: #f2f2f2;
 }
-
-.search-box {
-  display: flex;
-  gap: 2rem;
-  width: 100%;
-  border: 1.5px solid #ccc;
-  border-radius: 0.5rem;
-  background: #fff;
-  box-sizing: border-box;
-  justify-content: space-between;
-
-  align-items: flex-start; /* ← 高さ揃えず、幅を効かせる */
-}
-
-
-.search-col {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  width: 40%;
-}
-
 .search-box-wrapper {
-  display: flex;
-  justify-content: center;
-  width: 100%;
-  height:20%;
-  flex-direction: column;
+    width: 100%;
+    margin-bottom: 20px;
 }
 
-.search-field {
-  width: 100%;
+
+.MUser .search-box {
+    width: 100% !important;
+    max-width: 1400px !important;
+    min-width: 1000px !important;
+
+    margin: 0 auto !important;
+
+    border: 1.5px solid #ccc !important;
+    border-radius: 0.5rem !important;
+    background: #fff !important;
+
+    padding: 17px 35px !important;
+    box-sizing: border-box !important;
+
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 10px !important;
 }
 
+
+.MUser .check-top {
+    flex: 0 0 auto !important;    /* ← 幅を自動にして "左から詰まる"  */
+    width: auto !important;
+    align-self: flex-start !important; /* ← 親が flex でも左端に寄せる */
+    
+    display: flex !important;
+    justify-content: flex-start !important;
+    align-items: center !important;
+    gap: 30px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+/* ラベルの強制左寄せ */
+.MUser .check-top label {
+    display: flex !important;
+    align-items: center !important;
+    white-space: nowrap !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    gap: 10px !important;
+}
+.MUser .row-line {
+    display: flex !important;
+    justify-content: space-between !important;
+    width: 100% !important;
+    
+}
+
+.MUser .left-col,
+.MUser .right-col {
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+   
+}
+
+
+
+.MUser .form-label {
+    display: inline-block !important;
+    vertical-align: middle !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+.MUser .form-label span {
+    display: inline-block !important;
+    height: 38px !important;
+   
+    text-align: right !important;
+    white-space: nowrap !important;
+    width: 110px !important;
+}
+
+
+.MUser select,
+.MUser input[type="text"] {
+    height: 38px;
+}
+
+
+.MUser .note {
+    margin-left: 5px !important;
+    white-space: nowrap !important;
+    align-items: center !important;
+    height: 38px !important;
+}
+
+.MUser .state-area {
+    display: flex !important;
+    align-items: center !important;   /* 縦中央を揃える */
+    gap: 25px !important;
+    height: 38px !important;             /* チェックボックス間の幅を調整 */
+}
+.MUser .state-area label {
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;     /* ← チェックボックスと文字の距離を詰める */
+    white-space: nowrap !important;
+    height: 38px !important;
+}
+.user-id-link {
+    color: #0000EE;          /* ブラウザ標準の青 */
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.user-id-link:visited {
+    color: #551A8B;          /* 訪問済み（任意） */
+}
+
+.user-id-link:hover {
+    text-decoration: underline;
+}
 
 </style>
 
@@ -212,15 +343,29 @@
         });
     });
 
-    function checkBeforeDelete() {
-    const checked = document.querySelectorAll('input[name^="select["]:checked');
-    const count = checked.length;
+//     function checkBeforeDelete() {
+//     const checked = document.querySelectorAll('input[name^="select["]:checked');
+//     const count = checked.length;
 
-    if (count === 0) {
+//     if (count === 0) {
         
-        return true; // フォームは送信する
+//         return true; // フォームは送信する
+//     }
+
+//     return confirm(`${count}件選択されています。\n本当に削除しますか？`);
+// }
+function setUserGroup(groupId, groupName) {
+
+    // ▼ 施設グループ select に値をセット
+    const select = document.querySelector('select[name="user_group_id"]');
+    if (select) {
+        select.value = groupId;
     }
 
-    return confirm(`${count}件選択されています。\n本当に削除しますか？`);
+    // ▼ 検索条件を反映して再検索
+    const form = document.getElementById('searchForm');
+    if (form) {
+        form.submit();
+    }
 }
 </script>

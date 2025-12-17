@@ -7,7 +7,7 @@ use Cake\Log\Log;
 use Cake\Database\Expression\QueryExpression;
 use Cake\ORM\Query;
 use \Exception;
-
+use Cake\ORM\TableRegistry;
 /**
  * MUserGroup Controller
  *
@@ -226,5 +226,73 @@ class MUserGroupController extends AppController
     $this->set('mode', 'edit');
     $this->render('add_edit'); // ← 共通テンプレートを呼び出す
 }
+public function search()
+{
+    // MUser を起点にする
+    $mUserTable = $this->fetchTable('MUser');
 
+    $q = $this->request->getQuery();
+
+    $conditions = [];
+
+    /* ========= 検索条件 ========= */
+
+    // 施設コード（完全一致）
+    if (!empty($q['facility_cd'])) {
+        $conditions['MUser.user_id'] = $q['facility_cd'];
+    }
+
+    // 施設名称（部分一致）
+    if (!empty($q['facility_name'])) {
+        $conditions['MUser.user_name LIKE'] = '%' . $q['facility_name'] . '%';
+    }
+
+    // 施設グループコード（完全一致）
+    if (!empty($q['user_group_id'])) {
+        $conditions['mug.user_group_id'] = $q['user_group_id'];
+    }
+
+    // 施設グループ名（部分一致）
+    if (!empty($q['user_group_name'])) {
+        $conditions['mug.user_group_name LIKE'] = '%' . $q['user_group_name'] . '%';
+    }
+
+    // 削除除外（必要に応じて）
+    $conditions['MUser.del_flg'] = 0;
+
+    /* ========= クエリ ========= */
+
+    $query = $mUserTable->find()
+        ->select([
+            'facility_cd'      => 'MUser.user_id',
+            'facility_name'    => 'MUser.user_name',
+            'user_group_id'    => 'mug.user_group_id',
+            'user_group_name'  => 'mug.user_group_name',
+        ])
+        ->leftJoin(
+            ['mug' => 'm_user_group'],
+            "ISNUMERIC(SUBSTRING(CAST(MUser.user_id AS VARCHAR), 1, 5)) = 1
+             AND TRY_CAST(SUBSTRING(CAST(MUser.user_id AS VARCHAR), 1, 5) AS INT) = mug.user_group_id"
+        )
+        ->where($conditions)
+        ->order([
+            'mug.user_group_id' => 'ASC',
+            'MUser.user_id'     => 'ASC'
+        ])
+        ->limit(200)
+        ->all();
+
+    /* ========= View 用 ========= */
+
+    $viewedUsers = [];
+    foreach ($query as $row) {
+        // 一覧は「施設グループ検索」なので
+        // グループ単位で表示
+        if (!empty($row->user_group_id)) {
+            $viewedUsers[$row->user_group_id] = $row->user_group_name;
+        }
+    }
+
+    $this->set(compact('viewedUsers'));
+}
 }

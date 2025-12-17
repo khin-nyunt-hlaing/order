@@ -33,95 +33,126 @@ class MUserController extends AppController
      */
 public function index()
 {
-    //削除チェックボタン
-    $showDeleted = $this->request->is('post') ? $this->getRequest()->getData('del_flg') : null;
-
-    // POSTリクエスト取得
-    $request = $this->request->getData();
+    $request = $this->request->is('get')
+        ? $this->request->getQuery()
+        : $this->request->getData();
+    
 
     //施設グループリスト取得
     $MUserGroup = $this->fetchTable('MUserGroup');
-    $groupList = $MUserGroup->find('list', 
-        keyField : 'user_group_id',
-        valueField : 'user_group_name',
+    $groupList = $MUserGroup->find('list',
+        keyField: 'user_group_id',
+        valueField: 'user_group_name',
     )->where(['del_flg' => 0])->toArray();
 
     // サービステーブルのリスト取得
     $MService = $this->fetchTable('MService');
-    $serviceList = $MService->find('list', 
-        keyField : 'use_service_id',
-        valueField : 'service_name',
+    $serviceList = $MService->find('list',
+        keyField: 'use_service_id',
+        valueField: 'service_name',
     )->where(['del_flg' => 0])->toArray();
 
     //状態リスト
     $statusList = [
-        '' => '',
+        ''  => '',
         '0' => '準備中',
         '1' => '利用中',
         '2' => '取引停止',
     ];
 
-    // 検索条件の初期化
-    $userId = $request['user_id'] ?? '';
-    $userName = $request['user_name'] ?? '';
-    $serviceId = $request['use_service_id'] ?? '';
-    $status = $request['status'] ?? '';
+    // =========================
+    // 検索条件
+    // =========================
+    $userId      = $request['user_id'] ?? '';
+    $userName    = $request['user_name'] ?? '';
     $userGroupId = $request['user_group_id'] ?? '';
-    // 削除フラグのチェック（チェックボックスがオンの場合）
     $showDeleted = isset($request['del_flg']) && $request['del_flg'] === '1';
 
-    //MUserテーブル
-    $mUserTable = $this->fetchTable('MUser');    
+    // =========================
+    // MUser クエリ
+    // =========================
+    $mUserTable = $this->fetchTable('MUser');
 
-    // クエリ作成
     $query = $mUserTable->find()
-        ->contain(['MService'])// サービス名取得のため
-        ->enableAutoFields(true)
+        ->select([
+            'MUser.user_id',
+            'MUser.user_name',
+            'user_group_id'   => 'mug.user_group_id',
+            'user_group_name' => 'mug.user_group_name',
+            'MUser.disp_no',
+            'MUser.status',
+            'MUser.use_service_id',
+        ])
+        ->leftJoin(
+            ['mug' => 'm_user_group'],
+            "ISNUMERIC(SUBSTRING(CAST(MUser.user_id AS VARCHAR), 1, 5)) = 1
+             AND TRY_CAST(SUBSTRING(CAST(MUser.user_id AS VARCHAR), 1, 5) AS INT) = mug.user_group_id"
+        )
+        ->contain(['MService'])
         ->where(['MUser.disp_no IS NOT' => null])
-        ->order(['MUser.disp_no' => 'ASC',
-                    'MUser.user_id' => 'ASC'
-                ]);
+        ->order([
+            'MUser.disp_no' => 'ASC',
+            'MUser.user_id' => 'ASC'
+        ]);
 
- 
-
-    //削除フラグチェック
-    if(!$showDeleted){
+    // 削除フラグ
+    if (!$showDeleted) {
         $query->where(['MUser.del_flg' => '0']);
     }
-    //施設番号による完全一致
+
+
+    $includeMenuService = !empty($request['include_menu_service']);
+    $includeFoodService = !empty($request['include_food_service']);
+
+    $serviceIds = [];
+
+    // 献立サービス
+    if ($includeMenuService) {
+        $serviceIds = array_merge($serviceIds, [1, 2, 4]);
+    }
+
+    // 単品食材サービス
+    if ($includeFoodService) {
+        $serviceIds = array_merge($serviceIds, [3, 4]);
+    }
+
+    $serviceIds = array_unique($serviceIds);
+
+    if (!empty($serviceIds)) {
+        $query->where(['MUser.use_service_id IN' => $serviceIds]);
+    }
+
+    // 施設グループ
+    if (!empty($userGroupId)) {
+        $query->where(['mug.user_group_id' => $userGroupId]);
+    }
+
+    // 施設番号（完全一致）
     if (!empty($userId)) {
         $query->where(['MUser.user_id' => $userId]);
     }
-    //施設名による部分一致
+
+    // 施設名（部分一致）
     if (!empty($userName)) {
         $query->where(['MUser.user_name LIKE' => "%{$userName}%"]);
     }
-    //発注サービスによる絞込
-    if ($serviceId !== '') {
-        $query->where(['MService.use_service_id' => $serviceId]);
-    }
-    //状態による絞込
-    if ($status !== '' && in_array($status, ['0', '1', '2'], true)) {
-        $query->where(['MUser.status' => $status]);
+
+    // 状態
+    if ($this->request->is('post')) {
+        $status = (array)($request['status'] ?? []);
+    } else {
+        $status = ['0', '1']; // 初期表示
     }
 
-    //施設グループによる絞込
-    if (!empty($userGroupId)){
-        $query
-        ->innerJoin(
-            ['mug' => 'm_user_group'],
-            "ISNUMERIC(SUBSTRING(CAST(MUser.user_id AS VARCHAR), 1, 5)) = 1 
-            AND TRY_CAST(SUBSTRING(CAST(MUser.user_id AS VARCHAR), 1, 5) AS INT) = mug.user_group_id"
-        )
-        ->where(['mug.user_group_id' => $userGroupId]);
+    $status = array_values(array_intersect($status, ['0', '1', '2']));
+    if (!empty($status)) {
+        $query->where(['MUser.status IN' => $status]);
     }
 
-    //全件取得
-    $mUser = $query->all();
+    // 実行
+    $mUser  = $query->all();
     $count = $mUser->count();
 
-    
-            
     //リクエスト受け取り処理以下
     if ($this->request->is('post')) {
         $action = $this->request->getData('action');
@@ -211,10 +242,11 @@ public function index()
     }         
         // 取得したレコード数をビューに渡す
         $this->set(compact(
-            'mUser','count',
+            'mUser',
+            'count',
             'userId',
             'userName',
-            'serviceId',
+            // 'serviceId',
             'status',
             'userGroupId',
             'showDeleted',
@@ -224,6 +256,7 @@ public function index()
         ));    
     
 }
+
 
 /**
  * 施設マスタを登録します。

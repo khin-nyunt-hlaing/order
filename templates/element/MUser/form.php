@@ -13,13 +13,14 @@
  * @var int $defaultLeadTime
  * @var array|string[] $viewedUsers
  * @var array|string[] $selectedDispUserIds
- * 
  */
 ?>
+
 <?php
 // POSTされた値を優先的にフォームに反映させる
 $this->Form->setValueSources(['data', 'context']);
 ?>
+
 <div class="mUsers index content"><!--common-uiのcssをわざと外してます-->
     <?= $this->Form->create($mUser, ['type' => 'post']) ?>
 
@@ -27,29 +28,37 @@ $this->Form->setValueSources(['data', 'context']);
         <h2><?= $mode === 'edit' ? '施設編集' : '施設登録' ?></h2>
     </div>
 
-    <div class="flex-vertical" style="padding-top:1%; padding-left:3%; gap: 1.5rem"><!--ここのcssは何やろ？-->
+    <div class="flex-vertical" style="padding-top:1%; padding-left:3%; gap:1.5rem">
 
+        <!-- ===============================
+             施設グループ（検索＋readonly）
+        ================================ -->
         <div class="input-range">
             <div class="label-stack">
-            <span>施設グループ</span>
-            <span style="font-size: 1.5rem;">(必須)</span>
+                <span>施設グループ</span>
+                <span style="font-size:1.5rem;">(必須)</span>
             </div>
-            <?= $this->Form->control('user_group_id', [
-                'label' => false,
-                'type' => 'select',
-                'id' => 'user-group-select',
-                'required' => true,
-                'options' => $mUserGroups,
-                'value' => $selectedGroupId,
-                'empty' => '選択してください',
-                'disabled' => $mode === 'edit' ? true : false
-                
+
+            <div class="group-search-row">
+                <input type="text"
+                       id="user-group-name"
+                       class="readonly-like"
+                       value="<?= h($mUserGroups[$selectedGroupId] ?? '') ?>"
+                       readonly
+                       required>
+
+                <?php if ($mode !== 'edit'): ?>
+                    <button type="button" id="openGroupSearch">検索</button>
+                <?php endif; ?>
+            </div>
+
+            <?= $this->Form->hidden('user_group_id', [
+                'id'    => 'user-group-id',
+                'value' => $selectedGroupId
             ]) ?>
-            <!-- 編集時もグループ選択情報をサーバーへ送るための hidden -->
-            <?php if ($mode === 'edit'): ?>
-                <?= $this->Form->hidden('user_group_id', ['value' => $selectedGroupId]) ?>
-            <?php endif; ?>
         </div>
+
+
         <div class="input-range">
             <div class="label-stack">
                 <span style="font-size: 1.8rem;">発注サービス</span>
@@ -72,7 +81,6 @@ $this->Form->setValueSources(['data', 'context']);
         <div class="input-range">
             <div class="label-stack">
                 <span style="font-size: 1.8rem;">施設番号</span>
-                
             </div>
             <?php if ($mode === 'edit'): ?>
                 <?= $this->Form->control('user_id', [
@@ -81,13 +89,11 @@ $this->Form->setValueSources(['data', 'context']);
                     'label' => false,
                 ]) ?>
             <?php else: ?>
-                <!-- add時はhiddenで値を空にしておく or 完全に省略 -->
                 <?= $this->Form->control('user_id', [
                     'type' => 'hidden',
                     'value' => '',
                 ]) ?>
             <?php endif; ?>
-            
         </div>
 
         <div class="input-range">
@@ -96,10 +102,11 @@ $this->Form->setValueSources(['data', 'context']);
                 <span style="font-size: 1.5rem;">(必須)</span>
             </div>
             <?= $this->Form->control('user_name', [
-                'label' => false, 
+                'label' => false,
                 'type' => 'text',
                 'id' => 'user_name',
-                'required' => true,]) ?>
+                'required' => true,
+            ]) ?>
         </div>
 
         <div class="input-range">
@@ -108,16 +115,16 @@ $this->Form->setValueSources(['data', 'context']);
             </div>
             <?= $this->Form->create($mUser, ['id' => 'MUserForm']) ?>
                 <?= $this->Form->control('password', [
-                        'label' => false,
-                        'type' => 'password',
-                        'id' => 'password',
-                        'readonly' => true,          // ← 手入力不可だが送信はされる
-                        'value' => '',
-                        'autocomplete' => 'new-password',
-                        'style' => 'width:200px;'
-                    ]) ?>
+                    'label' => false,
+                    'type' => 'password',
+                    'id' => 'password',
+                    'readonly' => true,
+                    'value' => '',
+                    'autocomplete' => 'new-password',
+                    'style' => 'width:200px;'
+                ]) ?>
             <button type="button" onclick="generatePassword()" style="margin-bottom: 0;">
-                <?= $mode === 'edit' ? 'パスワード再発行' : 'ランダム生成' ?>
+                <?= $mode === 'edit' ? '生成' : '生成' ?>
             </button>
             <span id="plainPassword" style="font-weight:bold;"></span>
         </div>
@@ -127,20 +134,16 @@ $this->Form->setValueSources(['data', 'context']);
                 <div class="label-stack">
                     <span style="font-size: 1.8rem;">秘密の質問</span>
                 </div>
-                <!-- ボタンだけ表示 -->
                 <button type="button" id="resetSecretBtn">
                     質問と回答の削除
                 </button>
             </div>
 
-            <!-- CSRFトークンをJS用にhidden に置く -->
             <?= $this->Form->hidden('_csrfToken', [
                 'value' => $this->request->getAttribute('csrfToken'),
                 'id' => 'csrfToken'
             ]) ?>
-            <?php endif; ?>
-                
-
+        <?php endif; ?>
 
         <div class="input-range">
             <div class="label-stack">
@@ -151,12 +154,12 @@ $this->Form->setValueSources(['data', 'context']);
                 'id' => 'use-pattern-id',
                 'options' => $patternList,
                 'label' => false,
-                'required' => ($serviceList === '2.4'),  // ← ここで判定
-                'disabled' => true,//初期は触れない
+                'required' => ($serviceList === '2.4'),
+                'disabled' => true,
                 'empty' => '選択してください',
                 'value' => $mode === 'edit'
-                        ? ($mUser->use_pattern_id ?? null)  // editのときはカラム値 or null
-                        : null,                           // addのときは空
+                    ? ($mUser->use_pattern_id ?? null)
+                    : null,
                 'style' => 'max-width: 400px;'
             ]) ?>
         </div>
@@ -177,48 +180,47 @@ $this->Form->setValueSources(['data', 'context']);
 
         <div class="input-range">
             <div class="label-stack">
-            <span>利用状態</span>
-            <span style="font-size: 1.5rem;">(必須)</span>
+                <span>利用状態</span>
+                <span style="font-size: 1.5rem;">(必須)</span>
             </div>
-                    <?= $this->Form->control('status', [
-                        'label' => false,
-                        'type' => 'select',
-                        'options' => $statusList,
-                        'empty' => '選択してください',
-                    ]) ?>
+            <?= $this->Form->control('status', [
+                'label' => false,
+                'type' => 'select',
+                'options' => $statusList,
+                'empty' => '選択してください',
+            ]) ?>
         </div>
 
         <div class="input-range">
             <div class="label-stack">
-            <span>表示順</span>
-            <span style="font-size: 1.5rem;">(必須)</span>
+                <span>表示順</span>
+                <span style="font-size: 1.5rem;">(必須)</span>
             </div>
             <?= $this->Form->control('disp_no', [
-                    'label' => false,
-                    'id' => 'disp_no',
-                    'name' => 'disp_no',
-                    'min' => 0,
-                    'required' => true,
-                ]) ?>
+                'label' => false,
+                'id' => 'disp_no',
+                'name' => 'disp_no',
+                'min' => 0,
+                'required' => true,
+            ]) ?>
         </div>
 
-            <?php if ($mode === 'edit'): ?>
-                <div class="input-range">
-                    <div class="label-stack">
-                        <span style="padding-bottom: 16px;">削除</span>
-                    </div>
-                    <div class="del-flg-checkbox">
-                        <?= $this->Form->control('del_flg', [
-                            'type' => 'checkbox',
-                            'label' => '削除状態にする',
-                            'hiddenField' => true,
-                            'value' => '1',
-                            'checked' => $mUser->del_flg === '1',
-                        ]) ?>
-                    </div>
+        <?php if ($mode === 'edit'): ?>
+            <div class="input-range">
+                <div class="label-stack">
+                    <span style="padding-bottom: 16px;">削除</span>
                 </div>
-            <?php endif; ?>
-        
+                <div class="del-flg-checkbox">
+                    <?= $this->Form->control('del_flg', [
+                        'type' => 'checkbox',
+                        'label' => '削除状態にする',
+                        'hiddenField' => true,
+                        'value' => '1',
+                        'checked' => $mUser->del_flg === '1',
+                    ]) ?>
+                </div>
+            </div>
+        <?php endif; ?>
 
         <div class="input-range">
             <div class="label-stack">
@@ -239,11 +241,10 @@ $this->Form->setValueSources(['data', 'context']);
                                 <td>
                                     <?= $this->Form->control("disp_user_ids[{$id}]", [
                                         'type' => 'checkbox',
-                                        'value' => '1', 
+                                        'value' => '1',
                                         'label' => false,
                                         'class' => 'toggle-color',
-                                        'checked' => in_array((string)$id,
-                                        array_map('strval', $selectedDispUserIds ?? []), true),
+                                        'checked' => in_array((string)$id, array_map('strval', $selectedDispUserIds ?? []), true),
                                         'hiddenField' => false
                                     ]) ?>
                                 </td>
@@ -259,14 +260,14 @@ $this->Form->setValueSources(['data', 'context']);
     </div>
 
     <div class="mUserBox">
-        <?= $this->Form->button($mode === 'edit' ? '更新' : '登録', ['class' => 'akabtn-like']) ?>
-        <a href="<?= $this->Url->build(['action' => 'index']) ?>" 
-        class="aobtn-like" onclick="return confirm('遷移すると入力内容が破棄されます。よろしいですか？')">戻る</a>
+        <?= $this->Form->button($mode === 'edit' ? '更新' : '追加', ['class' => 'akabtn-like']) ?>
+        <a href="<?= $this->Url->build(['action' => 'index']) ?>"
+           class="aobtn-like"
+           onclick="return confirm('遷移すると入力内容が破棄されます。よろしいですか？')">戻る</a>
     </div>
 
-    <?= $this->Form->end() ?>   
+    <?= $this->Form->end() ?>
 </div>
-
 
 <style>
 .mUserBox {
@@ -292,7 +293,15 @@ $this->Form->setValueSources(['data', 'context']);
     background-color: #f5f5f5;
     color: #888;
 }
+.group-search-row {
+    display: flex;
+    align-items: center; /* ← center ではなく上揃え */
+    gap: 5px;
+}
 
+#openGroupSearch {
+    margin-top: -3px; /* ← 微調整（0〜4pxで好み調整） */
+}
 
 </style>
 <script>
@@ -339,11 +348,23 @@ document.addEventListener('DOMContentLoaded', function () {
     function toggleFields() {
         const val = serviceSelect.value;
 
-    // サービスID5で閲覧施設表示
+    // ===== 閲覧施設：表示は常にする =====
+    dispUser.style.display = 'table-row-group';
+
+    // チェック可否制御
+    const checkboxes = dispUser.querySelectorAll('input[type="checkbox"]');
+
     if (val === '5') {
-        dispUser.style.display = 'table-row-group'; // tbody 本来の表示形式
+        // 閲覧サービス → 設定可能
+        checkboxes.forEach(cb => {
+            cb.disabled = false;
+        });
     } else {
-        dispUser.style.display = 'none';
+        // それ以外 → 設定不可（チェックも外す）
+        checkboxes.forEach(cb => {
+            cb.checked = false;
+            cb.disabled = true;
+        });
     }
 
     // 配食商品パターンはID2,4のみ有効
@@ -388,6 +409,18 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 });
 
+document.getElementById('openGroupSearch').addEventListener('click', function () {
+    window.open(
+        '<?= $this->Url->build(["controller" => "MUserGroup", "action" => "search"]) ?>',
+        'groupSearch',
+        'width=900,height=600,scrollbars=yes'
+    );
+});
 
+// 検索画面から呼ばれる
+function setUserGroup(id, name) {
+    document.getElementById('user-group-id').value = id;
+    document.getElementById('user-group-name').value = name;
+}
 
 </script>
