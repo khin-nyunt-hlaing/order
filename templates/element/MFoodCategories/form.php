@@ -6,11 +6,9 @@
 
 ?>
 <div class="mfood-categories index content">
-    <?= $this->Form->create($mFoodCategory, [
-        'type' => 'file'
-    ]) ?>
+    <?= $this->Form->create($mFoodCategory) ?>
 
-    <h3><?= $mode === 'edit' ? '食材分類編集' : '食材分類登録' ?></h3>
+    <h3><?= $mode === 'edit' ? '単品食材分類編集' : '単品食材分類登録' ?></h3>
 
     <div class="flex-vertical">
         <div class="input-range">
@@ -20,12 +18,25 @@
                     <?= $mode === 'edit' ? '(必須)' : '(自動採番)' ?>
                 </span>
             </div>
-            <?= $this->Form->control('category_id', [
-                'label' => false,
-                'type' => 'text',
-                'readonly' => true,
-                'class' => 'readonly-like'
-            ]) ?>
+
+            <?php if ($mode === 'edit'): ?>
+                <?= $this->Form->control('category_id', [
+                    'type'  => 'text',
+                    'label' => false,
+                    'value' => $mFoodCategory->category_id,
+                    'readonly' => true,
+                    'class' => 'readonly-like'
+                ]) ?>
+            <?php else: ?>
+                <?= $this->Form->control('_dummy_category_id', [
+                    'type' => 'text',
+                    'label' => false,
+                    'value' => $nextCategoryId,
+                    'readonly' => true,
+                    'class' => 'readonly-like',
+                    'name' => false
+                ]) ?>
+            <?php endif; ?>
         </div>
 
         <div class="input-range">

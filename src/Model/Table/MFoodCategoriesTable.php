@@ -37,10 +37,10 @@ class MFoodCategoriesTable extends AppTable
     {
         parent::initialize($config);
 
-        $this->setTable('m_food_category');
+        $this->setTable('M_FOOD_CATEGORY');
         $this->setDisplayField('category_id');
         $this->setPrimaryKey('category_id');
-        $this->getSchema()->setColumnType('category_id', 'biginteger');
+        // $this->getSchema()->setColumnType('category_id', 'biginteger');
     }
 
     /**

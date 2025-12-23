@@ -505,31 +505,34 @@ public function edit($id = null)
 public function ajaxUsersByGroupAdd()
 {
     $this->request->allowMethod(['post']);
-    $groupId = $this->request->getData('user_group_id');
-
-    $allUsers = $this->fetchTable('MUser')->find('list', 
-        keyField    : 'user_id',
-        valueField  : 'user_name',
-    )
-    ->where([
-        'del_flg' => 0,
-        "user_id LIKE" => $groupId . '%'
-    ])
-    ->toArray();
-
-    // add用：POSTされた selected_users を使う
-    $selectedUsers = $this->request->getData('selected_users') ?? [];
-    $selectedUserIds = array_keys(array_filter($selectedUsers, fn($v) => $v === '1'));
-
-    Log::debug('ajaxUsersByGroupAdd called');
-    Log::debug('user_group_id: ' . $groupId);
-    Log::debug('selected_users: ' . json_encode($selectedUsers));
-
-    $this->set(compact('allUsers', 'selectedUserIds'));
-    $this->set('users', $allUsers);
-    $this->set('selectedUserIds', $selectedUserIds);
     $this->viewBuilder()->disableAutoLayout();
-    $this->render('ajax_user_list'); 
+
+    $userGroupId = $this->request->getData('user_group_id');
+    $selectedUsers = $this->request->getData('selected_users') ?? [];
+    $selectedUserIds = array_keys(
+        array_filter($selectedUsers, fn($v) => $v === '1')
+    );
+
+    // ★ edit と同じ「list形式」に統一
+    $users = $this->fetchTable('MUser')
+        ->find('list',
+            keyField: 'user_id',
+            valueField: 'user_name'
+        )
+        ->where([
+            'del_flg' => 0,
+            'user_id LIKE' => $userGroupId . '%'
+        ])
+        ->order(['user_id' => 'ASC'])
+        ->toArray();
+
+    Log::debug('[ajaxUsersByGroupAdd]');
+    Log::debug('group=' . $userGroupId);
+    Log::debug('selected=' . json_encode($selectedUserIds));
+
+    // ★ edit と完全一致
+    $this->set(compact('users', 'selectedUserIds'));
+    $this->render('ajax_user_list');
 }
 //edit-mode用
 public function ajaxUsersByGroup()

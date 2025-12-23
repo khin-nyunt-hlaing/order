@@ -14,20 +14,47 @@ class MFoodCategoriesController extends AppController
 {
     public function index()
     {
-        
-        $showDeleted =  $this->request->is('post') ? $this->getRequest()->getData('del_flg') : null;
+        /* =========================
+     * 検索条件（GET）
+     * ========================= */
+        $q = $this->request->getQuery();
+        $conditions = [];
 
+        // 削除データを含める
+        $showDeleted = ($q['del_flg'] ?? '') === '1';
+        if (!$showDeleted) {
+            $conditions['MFoodCategories.del_flg'] = 0;
+        }
+
+        // 分類ID（完全一致）
+        if (!empty($q['category_id'])) {
+            $conditions['MFoodCategories.category_id'] = $q['category_id'];
+        }
+
+        // 分類名称（部分一致）
+        if (!empty($q['category_name'])) {
+            $conditions['MFoodCategories.category_name LIKE']
+                = '%' . $q['category_name'] . '%';
+        }
+        /* =========================
+        * 一覧取得
+        * ========================= */
         $MFoodCategories = $this->MFoodCategories->find()
-            ->where($showDeleted ? [] : ['del_flg' => 0])
+            ->where($conditions)
             ->order(['DISP_NO' => 'ASC']);
 
         $mFoodCategories = $this->paginate($MFoodCategories);
 
         // ✅ 件数も同じ条件で
         $count = $MFoodCategories->count();
-        $this->set(compact('count'));
 
-        $this->set(compact('mFoodCategories', 'count'));
+        $this->set(compact(
+            'mFoodCategories',
+            'count',
+            'q',
+            'showDeleted'
+        ));
+       
 
         if ($this->request->is('post')) {
             $action = $this->request->getData('action');
@@ -136,45 +163,73 @@ class MFoodCategoriesController extends AppController
     }
 
     public function add()
-    {
-        $mFoodCategory = $this->MFoodCategories->newEmptyEntity();
+{
+    $mFoodCategory = $this->MFoodCategories->newEmptyEntity();
 
-         if (!$this->request->is('post')) {
-            $mFoodCategory->disp_no = 0;
-         }
+    // =========================
+    // 新規表示用：次の分類ID（MAX + 1）
+    // ※ 表示専用（DBには保存しない）
+    // =========================
+    $nextCategoryId = $this->MFoodCategories
+        ->find()
+        ->select(['max' => 'MAX(category_id)'])
+        ->first()
+        ->max ?? 0;
+    $nextCategoryId++;
 
-        try{
-                // $mFoodCategory = $this->MFoodCategories->newEmptyEntity();
-                // $mFoodCategory->del_flg = '0';
-
-                if ($this->request->is('post')) {
-                    $mFoodCategory = $this->MFoodCategories->patchEntity($mFoodCategory, $this->request->getData());
-                    $loginUserId = $this->request->getAttribute('identity')->get('user_id');
-
-                    $mFoodCategory->del_flg = '0';
-                    $mFoodCategory->create_user = $loginUserId;
-                    $mFoodCategory->update_user = $loginUserId;
-
-                    Log::debug('🟡 保存前のエンティティ: ' . print_r($mFoodCategory->toArray(), true));
-
-                    if ($this->MFoodCategories->save($mFoodCategory)) {
-                        $this->Flash->success(__('登録しました。'));
-                        return $this->redirect(['action' => 'index']);
-                    } else {
-                        $this->Flash->error(__('登録に失敗しました。'));
-                    }
-                }
-
-            } catch (Exception $e){
-                $this->Flash->error('システムエラーです。登録に失敗しました。');
-                Log::error('[システムエラー] ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
-            }
-
-        $this->set(compact('mFoodCategory'));
-        $this->set('mode', 'add');
-        $this->render('add_edit');
-
+    // 初期表示時のデフォルト
+    if (!$this->request->is('post')) {
+        $mFoodCategory->disp_no = 0;
     }
+
+    try {
+    if ($this->request->is('post')) {
+
+        $mFoodCategory = $this->MFoodCategories->patchEntity(
+            $mFoodCategory,
+            $this->request->getData()
+        );
+
+        $loginUserId = $this->request
+            ->getAttribute('identity')
+            ->get('user_id');
+
+        $mFoodCategory->del_flg     = 0;
+        $mFoodCategory->create_user = $loginUserId;
+        $mFoodCategory->update_user = $loginUserId;
+
+        if ($this->MFoodCategories->save($mFoodCategory)) {
+
+            // ✅ 成功
+            $this->Flash->success(__('登録しました。'));
+            return $this->redirect(['action' => 'index']);
+
+        } else {
+
+            // ❌ 保存失敗（バリデーション等）
+            Log::debug('登録失敗: ' . print_r($mFoodCategory->getErrors(), true));
+            $this->Flash->error(__('登録に失敗しました。'));
+        }
+    }
+
+} catch (Exception $e) {
+
+    // ❌ システムエラー
+    $this->Flash->error('システムエラーです。登録に失敗しました。');
+    Log::error(
+        '[システムエラー] ' . $e->getMessage(),
+        ['trace' => $e->getTraceAsString()]
+    );
+}
+
+    $this->set(compact('mFoodCategory', 'nextCategoryId'));
+    $this->set('mode', 'add');
+    $this->render('add_edit');
+}
+
+
+ 
+
 
     public function edit($id = null)
     {
