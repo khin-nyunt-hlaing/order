@@ -21,43 +21,67 @@ class MUserGroupController extends AppController
      * @return \Cake\Http\Response|null|void Renders view
      */
     public function index()
-    {
-        // ▼ MUserGroup 用
-        $showDeleted = $this->request->getData('del_flg') === '1';
+{
+    /* =========================
+     * 検索条件（GET）
+     * ========================= */
+    $q = $this->request->getQuery();
+    $conditions = [];
 
-        $usergroupQuery = $this->MUserGroup->find()
-            ->where($showDeleted ? [] : ['del_flg' => 0])
-            ->order(['disp_no' => 'ASC']);
-        $mUserGroup = $this->paginate($usergroupQuery);
-        $this->set(compact('mUserGroup'));
+    // 削除データを含める
+    $showDeleted = ($q['del_flg'] ?? '') === '1';
+    if (!$showDeleted) {
+        $conditions['MUserGroup.del_flg'] = 0;
+    }
 
-        // 件数も同じ条件で
-        $count = $usergroupQuery->count();
-        $this->set(compact('count'));
+    // 施設グループコード（完全一致）
+    if (!empty($q['user_group_id'])) {
+        $conditions['MUserGroup.user_group_id'] = $q['user_group_id'];
+    }
 
-        if ($this->request->is('post')) {
-            $action = $this->request->getData('action');
-            $selected = $this->request->getData('select') ?? [];
-            $selectedIds = array_keys(array_filter($selected));
-            $selectcount = count($selectedIds);
+    // 施設グループ名（部分一致）
+    if (!empty($q['user_group_name'])) {
+        $conditions['MUserGroup.user_group_name LIKE']
+            = '%' . $q['user_group_name'] . '%';
+    }
 
-            // 追加処理
-            if ($action === 'add') {
-                return $this->redirect(['action' => 'add']);
+    /* =========================
+     * 一覧取得
+     * ========================= */
+    $usergroupQuery = $this->MUserGroup->find()
+        ->where($conditions)
+        ->order(['disp_no' => 'ASC']);
+
+    $mUserGroup = $this->paginate($usergroupQuery);
+    $count = $usergroupQuery->count();
+
+    $this->set(compact('mUserGroup', 'count'));
+
+
+    if ($this->request->is('post')) {
+
+        $action = $this->request->getData('action');
+        $selected = $this->request->getData('select') ?? [];
+        $selectedIds = array_keys(array_filter($selected));
+        $selectcount = count($selectedIds);
+
+        // 追加
+        if ($action === 'add') {
+            return $this->redirect(['action' => 'add']);
+        }
+
+        // 更新
+        if ($action === 'edit') {
+            if ($selectcount === 1) {
+                return $this->redirect(['action' => 'edit', $selectedIds[0]]);
+            } elseif ($selectcount === 0) {
+                $this->Flash->error('施設グループが選択されていません。');
+            } else {
+                $this->Flash->error('更新は1件のみ選択可能です。');
             }
-            
-            // 更新処理
-            if ($action === 'edit') {
-                if ($selectcount === 1) {
-                    return $this->redirect(['action' => 'edit', $selectedIds[0]]);
-                } elseif ($selectcount === 0) {
-                    $this->Flash->error('施設グループが選択されていません。');
-                } else {
-                    $this->Flash->error('更新は1件のみ選択可能です。');
-                }
-            }
-            
-           // 削除処理
+        }
+
+        // 削除処理
             if ($action === 'delete') {
                 if(!empty($selectedIds)){
                     Log::debug("🟠 Delete action triggered: selectedIds = " . json_encode($selectedIds));
@@ -123,6 +147,9 @@ class MUserGroupController extends AppController
         }
     }
 
+
+
+
     /**
      * Add method
      *
@@ -141,7 +168,12 @@ class MUserGroupController extends AppController
             ->select(['max_id' => 'MAX(user_group_id)'])
             ->first()
             ->max_id ?? 0;
-        $mUserGroup->user_group_id = $maxId + 1;
+        $nextId = $maxId + 1;
+
+        if (!$this->request->is('post')) {
+            $mUserGroup->user_group_id = $nextId;
+            $mUserGroup->disp_no       = $nextId;
+        }
 
         Log::debug('セットされた次のuser_group_id: ' . $mUserGroup->user_group_id);
 
@@ -151,6 +183,7 @@ class MUserGroupController extends AppController
             $mUserGroup->del_flg = "0";
             $mUserGroup->create_user = $loginUserId;
             $mUserGroup->update_user = $loginUserId;
+            
             try {
                 if ($this->MUserGroup->save($mUserGroup)) {
                     $this->Flash->success(__('登録しました。'));

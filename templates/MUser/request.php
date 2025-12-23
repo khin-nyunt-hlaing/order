@@ -6,7 +6,7 @@
 ?>
 <div class="mUser  index content">
 <div class="titlebox">
-<p1>パスワード再発行</p1>
+<p1>パスワード再設定</p1>
 </div>
  <?= $this->Form->create(null, ['url' => ['action' => 'request'], 'type' => 'post', 'id' => 'requestForm']) ?>
     <div class="Leftbox">

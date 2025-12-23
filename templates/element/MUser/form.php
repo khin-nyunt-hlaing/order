@@ -295,7 +295,7 @@ $this->Form->setValueSources(['data', 'context']);
 }
 .group-search-row {
     display: flex;
-    align-items: center; /* ← center ではなく上揃え */
+    align-items: center;
     gap: 5px;
 }
 

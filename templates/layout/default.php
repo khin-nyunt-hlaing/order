@@ -49,7 +49,7 @@ $cakeDescription = '発注管理システム おたっしゃごぜん';
 
             <?php if ($controller === 'Mmenus' && $action === 'index'): ?>
                 <div class="top-nav-links">
-                    <?= $this->Html->link('パスワード再発行', ['controller' => 'MUser', 'action' => 'reset'], ['class' => 'top-button']) ?>
+                    <?= $this->Html->link('パスワード再設定', ['controller' => 'MUser', 'action' => 'reset'], ['class' => 'top-button']) ?>
                     <?= $this->Html->link('ログアウト', ['controller' => 'MUser', 'action' => 'logout'], ['class' => 'top-button']) ?>
                 </div>
             <?php endif; ?>

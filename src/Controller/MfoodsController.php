@@ -37,6 +37,8 @@ public function index()
     $foodId = $request['food_id'] ?? '';
     $foodName = $request['food_name'] ?? '';
     $userGroupId = $request['user_group_id'] ?? '';
+    $categoryId   = $request['category_id'] ?? '';
+    $categoryName = $request['category_name'] ?? '';
     $showDeleted = isset($request['del_flg']) && $request['del_flg'] === '1';//状態確認、チェックが入っていればtrue
 
     // Mfoods テーブル
@@ -66,6 +68,16 @@ public function index()
     // 食品名による部分一致
     if (!empty($foodName)) {
         $query->where(['Mfoods.food_name LIKE' => "%{$foodName}%"]);
+    }
+    if (!empty($categoryId)) {
+        $query->where(['MFoodCategories.category_id' => $categoryId]);
+    }
+
+    // 分類名称（部分一致）
+    if (!empty($categoryName)) {
+        $query->where([
+            'MFoodCategories.category_name LIKE' => "%{$categoryName}%"
+        ]);
     }
 
     // group_idで絞込があるとき
@@ -117,7 +129,7 @@ public function index()
         ->toArray();
 
 
-    $this->set(compact('mfoods', 'count', 'foodId', 'foodName', 'userGroupId','showDeleted', 'groupList'));
+    $this->set(compact('mfoods', 'count', 'foodId', 'foodName', 'userGroupId','categoryId','categoryName','showDeleted', 'groupList'));
 
 
         if ($this->request->is('post')) {
@@ -212,8 +224,13 @@ public function add()
 {
     $mfood = $this->Mfoods->newEmptyEntity();
 
-     if (!$this->request->is('post')) {
-        $mfood->disp_no = 0;
+    if (!$this->request->is('post')) {
+
+        $count = $this->Mfoods->find()
+            ->where(['del_flg' => 0])
+            ->count();
+
+        $mfood->disp_no = $count + 1;
     }
 
     // カテゴリ一覧（未削除のみ）
@@ -276,6 +293,12 @@ public function add()
             } else {
                 $this->Flash->error(__('入力内容にエラーがあります。内容をご確認ください。'));
             }
+            $this->set('selectedGroupId', $selectedGroupId);
+            $this->set('selectedUserIds', $selectedUserIds);
+            $this->set(compact('mfood', 'mFoodCategories', 'mUserGroup', 'mUser'));
+            $this->set('mode', 'add');
+            $this->render('add_edit');
+            return;
         } else {
             // トランザクション開始
             $conn = $this->Mfoods->getConnection();
@@ -344,6 +367,7 @@ public function edit($id = null)
         valueField : 'category_name'
     )->where(['del_flg' => 0])->toArray();
 
+    // 変数名を複数形に統一
     $mUserGroup = $this->fetchTable('MUserGroup')->find('list', 
         keyField : 'user_group_id',
         valueField : 'user_group_name'
@@ -360,14 +384,13 @@ public function edit($id = null)
 
         //ここでAjax変更後の選択グループを優先
         if (!empty($data['selected_group_id'])) {
-        $data['user_group_id'] = $data['selected_group_id'];
+            $data['user_group_id'] = $data['selected_group_id'];
         }
 
         // ログインユーザー設定
         $loginUserId = $this->request->getAttribute('identity')->get('user_id');
         $data['update_user'] = $loginUserId;
 
-        
         //エンティティ更新
         $mfood = $this->Mfoods->patchEntity($mfood, $data);
 
@@ -377,14 +400,18 @@ public function edit($id = null)
         $data['user_ids'] = $selectedUserIds;
         Log::debug('選択された施設IDs: ' . print_r($selectedUserIds, true));
 
-
         if (empty($selectedUserIds)){
             $mfood->setError('user_ids', ['施設が選択されていません']);
-            //$this->Flash->error('施設が選択されていません');
         }
         
         //通常バリデーションチェック
         if ($mfood->hasErrors()) {
+            if (!empty($selectedUserIds)) {
+                $selectedGroupId = (int)substr((string)$selectedUserIds[0], 0, 5);
+            } else {
+                $selectedGroupId = null;
+            }
+
             $errors = $mfood->getErrors();
             if (!empty($errors['user_ids'])) {
                 $this->Flash->error($errors['user_ids'][0]);
@@ -394,6 +421,7 @@ public function edit($id = null)
             
             Log::warning('[edit] バリデーションエラー: ' . print_r($mfood->getErrors(), true));
 
+            // ★ 修正②：mUserGroups を View に渡す
             $this->set(compact(
                 'mfood',
                 'mFoodCategories',
@@ -404,16 +432,13 @@ public function edit($id = null)
             ));
             
             $this->set('mode', 'edit');
-            $this->render('add_edit');
-            return;
+            return $this->render('add_edit');
         }
 
         //トランザクション開始
         $conn = $this->Mfoods->getConnection();
         $conn->begin();
         try {
-//            throw new \Exception('テスト用のシステムエラー');
-            //食材情報保存（失敗したらPersistenceFailedExceptionが投げられる）
             $this->Mfoods->saveOrFail($mfood);
             Log::debug("[edit] 食材情報保存成功: food_id={$id}");
 
@@ -446,15 +471,14 @@ public function edit($id = null)
         }
     }
 
-           
     //グループIDを抽出（施設が１つ以上ある場合）
     $groupIds = collection($mfood->m_users)
-    ->map(function($user){
-        //user_idの先頭５桁がグループId
-        return(int)substr((string)$user->user_id, 0, 5);
-    })
-    ->unique()
-    ->toList();
+        ->map(function($user){
+            //user_idの先頭５桁がグループId
+            return (int)substr((string)$user->user_id, 0, 5);
+        })
+        ->unique()
+        ->toList();
     
     $selectedGroupId = $groupIds[0] ?? null;
     
@@ -475,6 +499,7 @@ public function edit($id = null)
     $this->set('mode', 'edit');
     $this->render('add_edit');
 }
+
 
 //add-mode用
 public function ajaxUsersByGroupAdd()

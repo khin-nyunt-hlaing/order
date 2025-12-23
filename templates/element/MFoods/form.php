@@ -2,7 +2,7 @@
 <?= $this->Form->create($mfood, ['type' => 'post']) ?>
 
     <div class="titlebox">
-        <p1><?= $mode === 'edit' ? '食材商品編集' : '食材商品登録' ?></p1>
+        <p1><?= $mode === 'edit' ? '単品食材商品編集' : '単品食材商品登録' ?></p1>
     </div>
     
 <div class="flex-vertical" style="padding-top: 3% !important;gap:1rem; padding-bottom:10px;">
@@ -79,26 +79,31 @@
             </div>
 
             <div class="input-range">
-            <div class="label-stack">
-            <span>施設グループ</span>
+            <div class="label-stack"><span>施設グループ</span></div>
+            
+            <div class="group-search-row">
+                <input type="text"
+                       id="user-group-name"
+                       class="readonly-like"
+                       value="<?= h($mUserGroup[$selectedGroupId] ?? '') ?>"
+                       readonly
+                       required>
+
+                <?php if ($mode !== 'edit'): ?>
+                    <button type="button" id="openGroupSearch">検索</button>
+                <?php endif; ?>
             </div>
-            <?= $this->Form->control('user_group_id', [
-                'label' => false,
-                'type' => 'select',
-                'id' => 'user_group_id',
-                //'required' => true,
-                'options' => $mUserGroup,
-                'empty' => '選択してください',
-                'value' => $selectedGroupId,
-                'style' => 'max-width: 500px;',
-                
-            ]) ?>
             <!-- グループ選択情報をサーバーへ送るための hidden -->
-            <?= $this->Form->hidden('selected_group_id', ['id' => 'selected-group-id']) ?>
+            <?= $this->Form->hidden('user_group_id', [
+                'id'    => 'user-group-id',
+                'value' => $selectedGroupId
+            ]) ?>
 
             </div>
-    
-
+            <div class="select-btn-area">
+                <button type="button" id="check-all" class="aobtn-like">全選択</button>
+                <button type="button" id="uncheck-all" class="aobtn-like">全解除</button>
+            </div>
             <div class="input-range">
             <div class="label-stack">
                 <span>施設</span>
@@ -140,15 +145,18 @@
 
                         <?php if ($mode === 'edit'): ?>
                             <?php foreach ($mUser as $userId => $userName): ?>
-                                <?php $userGroupPrefix = substr((string)$userId, 0, 5);?>
+                                <?php $userGroupPrefix = substr((string)$userId, 0, 5); ?>
                                 <?php if (empty($selectedGroupId) || (string)$userGroupPrefix === (string)$selectedGroupId): ?>
                                     <tr>
                                         <td>
-                                            <?= $this->Form->control("selected_users[]", [
+                                            <?= $this->Form->control("selected_users[{$userId}]", [
                                                 'type' => 'checkbox',
                                                 'value' => '1',
-                                                'checked' => in_array((string)$id,
-                                        array_map('strval', $selectedFoodUserIds ?? []), true),
+                                                'checked' => in_array(
+                                                    (string)$userId,
+                                                    array_map('strval', $selectedUserIds ?? []),
+                                                    true
+                                                ),
                                                 'label' => false
                                             ]) ?>
                                         </td>
@@ -212,140 +220,124 @@
     margin-top: 1rem;
     width: 50%;
 }
+.select-btn-area {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 6px;
+    justify-content: flex-start;
+    margin-top: 1rem;
+    margin-left: 185px;
+}
+.readonly-like {
+    background-color: #f5f5f5;
+    color: #888;
+}
+.group-search-row {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+#openGroupSearch {
+    margin-top: -3px; /* ← 微調整（0〜4pxで好み調整） */
+}
 </style>
 
 <script>
-    $(function () {
-        var groupId = $('#user_group_id').val();
-        var foodId = <?= json_encode($mfood->food_id ?? null) ?>;
-        var mode = <?=json_encode($mode ?? 'add') ?>;
+/* ================================
+ * グローバル変数
+ * ================================ */
+var MFoods = {
+    foodId: <?= json_encode($mfood->food_id ?? null) ?>,
+    mode: <?= json_encode($mode ?? 'add') ?>,
+    ajaxUrl: ''
+};
 
-    //呼び出し先を add/edit で切り替え
-        var ajaxUrl = '';
-        if (mode === 'edit') {
-            ajaxUrl = '<?= $this->Url->build(["controller" => "Mfoods", "action" => "ajaxUsersByGroup"]) ?>';
-        } else {
-            ajaxUrl = '<?= $this->Url->build(["controller" => "Mfoods", "action" => "ajaxUsersByGroupAdd"]) ?>';
-        }
+/* ================================
+ * 初期化
+ * ================================ */
+$(function () {
 
-        // 選択されているチェックボックスを収集（add用）
-        function getSelectedUsers() {
-            var selected = {};
-            $('input[name^="selected_users"]:checked').each(function () {
-                var name = $(this).attr('name'); // e.g., selected_users[40000001]
-                var userId = name.match(/\[(\d+)\]/)?.[1];
-                if (userId) {
-                    selected[userId] = '1';
-                }
-            });
-            return selected;
-        }
+    // 呼び出し先を add/edit で切り替え
+    MFoods.ajaxUrl = (MFoods.mode === 'edit')
+        ? '<?= $this->Url->build(["controller" => "Mfoods", "action" => "ajaxUsersByGroup"]) ?>'
+        : '<?= $this->Url->build(["controller" => "Mfoods", "action" => "ajaxUsersByGroupAdd"]) ?>';
 
-        // 共通関数：グループIDを指定して施設リストを取得
-        function fetchUserList(groupId) {
-            // if (!groupId) {
-            //     $('#user-list').html('');
-            //     return;
-            // }
+    // edit は初期表示で取得
+    if (MFoods.mode === 'edit') {
+        fetchUserList($('#user-group-id').val());
+    }
 
-            var requestData = (mode === 'edit') ? {
-                user_group_id: groupId,
-                food_id: foodId
-            } : {
-                user_group_id: groupId,
-                selected_users: getSelectedUsers()
-            };
-
-            $.ajax({
-                url: ajaxUrl,
-                method: 'POST',
-                data: requestData,
-                headers: {
-                    'X-CSRF-Token': $('meta[name="csrfToken"]').attr('content')
-                },
-                success: function (response) {
-                    $('#user-list').html(response);
-                    $('#selected-group-id').val(groupId); // hidden項目に保持
-                },
-                error: function () {
-                    alert('施設リストの取得に失敗しました。');
-                }
-            });
-        }
-
-        // 初期表示時:セレクトボックスに設定されている値で呼び出し
-        // if (groupId) {
-            fetchUserList(groupId);
-        // }
-
-        // セレクトボックス変更時に再取得
-        $('#user_group_id').on('change', function () {
-            var groupId = $(this).val();
-            fetchUserList(groupId);
-        });
+    // 施設グループ検索
+    $('#openGroupSearch').on('click', function () {
+        window.open(
+            '<?= $this->Url->build(["controller" => "MUserGroup", "action" => "search"]) ?>',
+            'groupSearch',
+            'width=900,height=600'
+        );
     });
 
-</script>
-<script>
-  const input = document.getElementById('disp_no');
-
-  input.addEventListener('input', () => {
-    // 数値を文字列として扱う
-    let val = input.value;
-
-    // マイナスや小数点は除外する場合はここで処理
-    val = val.replace(/[^0-9]/g, '');
-
-    // 18桁を超えたら切り捨て
-    if (val.length > 18) {
-      val = val.slice(0, 18);
-    }
-
-    input.value = val;
-  });
-</script>
-<script>
-  document.addEventListener('DOMContentLoaded', () => {
-    const input   = document.getElementById('var1');
-    const counter = document.getElementById('counter');
-    const maxUnits = Number(input.dataset.maxUnits) || 20;
-
-    // 半角=1, 全角=2 としてカウント
-    // 半角は ASCII と 半角カナ(FF61-FF9F) を1、それ以外は2
-    const unitOf = ch =>
-      (/^[\x00-\x7F]$/.test(ch) || (/^[\uFF61-\uFF9F]$/.test(ch))) ? 1 : 2;
-
-    let composing = false; // IME変換中フラグ
-
-    function clampValue(str) {
-      let used = 0;
-      let out = '';
-      for (const ch of str) {               // code point単位で走査
-        const u = unitOf(ch);
-        if (used + u > maxUnits) break;
-        out += ch;
-        used += u;
-      }
-      return { out, used };
-    }
-
-    function update() {
-      const { out, used } = clampValue(input.value);
-      if (out !== input.value) input.value = out;
-        // ここはユーザーに残りを見せるだけの表示なので不要ならコメントアウト可
-        // if (counter) counter.textContent = `合算: ${used}/${maxUnits}（半角=1, 全角=2）`;
-    }
-
-    input.addEventListener('compositionstart', () => { composing = true; });
-    input.addEventListener('compositionend',   () => { composing = false; update(); });
-
-    input.addEventListener('input', () => {
-      if (composing) return; // IME中は確定後に制御
-      update();
+    // 全選択
+    $('#check-all').on('click', function () {
+        $('#user-list input[type="checkbox"]').prop('checked', true);
     });
 
-    // 初期表示時
-    update();
-  });
+    // 全解除
+    $('#uncheck-all').on('click', function () {
+        $('#user-list input[type="checkbox"]').prop('checked', false);
+    });
+});
+
+/* ================================
+ * 選択済み施設取得（add用）
+ * ================================ */
+function getSelectedUsers() {
+    var selected = {};
+    $('input[name^="selected_users"]:checked').each(function () {
+        var match = $(this).attr('name').match(/\[(\d+)\]/);
+        if (match) {
+            selected[match[1]] = '1';
+        }
+    });
+    return selected;
+}
+
+/* ================================
+ * 施設一覧取得（★グローバル）
+ * ================================ */
+function fetchUserList(groupId) {
+    if (!groupId) return;
+
+    $.ajax({
+        url: MFoods.ajaxUrl,
+        method: 'POST',
+        data: (MFoods.mode === 'edit')
+            ? { user_group_id: groupId, food_id: MFoods.foodId }
+            : { user_group_id: groupId, selected_users: getSelectedUsers() },
+        headers: { 'X-CSRF-Token': $('meta[name="csrfToken"]').attr('content') },
+        success: function (html) {
+            $('#user-list').html(html);
+        }
+    });
+}
+
+/* ================================
+ * search.php から呼ばれる
+ * ================================ */
+function setUserGroup(groupId, groupName) {
+
+    // hidden
+    $('#user-group-id').val(groupId);
+
+    // 表示名
+    $('#user-group-name').val(groupName);
+
+    // 施設一覧更新
+    fetchUserList(groupId);
+}
 </script>
+
+
+
+
 

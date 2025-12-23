@@ -11,7 +11,7 @@
 ?>
 <div class="mUser index content">
     <div class="titlebox">
-        <p1>パスワード再発行</p1>
+        <p1>パスワード再設定</p1>
     </div>
     <?= $this->Form->create(null, ['type' => 'post']) ?>
     <!-- 施設番号は自動でhiddenにセット -->
@@ -33,39 +33,39 @@
             <div class="Leftminibox" style="display:flex;">
                 <p style="width:250px; padding-top: 5px;">新しいパスワード</p>
                 <div>
-                <?= $this->Form->control('loginpass', [
-                    'placeholder' => 'パスワードを入力してください',
-                    'type' => 'password',
-                    'maxlength' => 100,
-                    'required' => true,
-                    'id' => 'logpass',
-                    'style' => 'width:30rem;',
-                    'label' => false,
-                    'autocomplete' => 'new-password', // または 'off'
-                    'value' => '' // 空にする
-                ]) ?>
-
-                <?php if (!empty($errors['loginpass'])): ?>
-                <div class="error-message" style="color:red; margin-top: 0.5em;">
-                <?= h($errors['loginpass'][0]) ?>
-                </div>
-                <?php endif; ?>    
-
-                <p>（必須）</p>
+                    <div class="password-wrap">
+                        <?= $this->Form->control('loginpass', [
+                            'placeholder' => 'パスワードを入力してください',
+                            'type' => 'password',
+                            'id' => 'logpass',
+                            'maxlength' => 100,
+                            'required' => true,
+                            'label' => false,
+                            'style' => 'width:30rem;',
+                            'autocomplete' => 'new-password',
+                            'value' => ''
+                        ]) ?>
+                        <span class="toggle-password" data-target="logpass">👁</span>
+                    </div>
+                    <p>（必須）</p>
                 </div>
             </div>
+
             <div class="Leftminibox" style="display:flex;">
                 <p style="width:250px; padding-top: 5px;">新しいパスワード（確認用）</p>
                 <div>
-                <?= $this->Form->control('confirmloginpass', [
-                    'placeholder' => 'もう一度入力してください',
-                    'type' => 'password',
-                    'required' => true,
-                    'id' => 'conlogpass',
-                    'style' => 'width:30rem;',
-                    'label' => false
-                ]) ?>
-                <p>（必須）</p>
+                    <div class="password-wrap">
+                        <?= $this->Form->control('confirmloginpass', [
+                            'placeholder' => 'パスワードを入力してください',
+                            'type' => 'password',
+                            'id' => 'conlogpass',
+                            'required' => true,
+                            'label' => false,
+                            'style' => 'width:30rem;',
+                        ]) ?>
+                        <span class="toggle-password" data-target="conlogpass">👁</span>
+                    </div>
+                    <p>（必須）</p>
                 </div>
             </div>
         </div>
@@ -120,16 +120,20 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    const clearBtn = document.getElementById('clearQuestionBtn');
-    const questionSelect = document.getElementById('secret_question');
-    const answerInput = document.getElementById('passanswer');
+    document.querySelectorAll('.toggle-password').forEach(function (icon) {
+        icon.addEventListener('click', function () {
+            const input = document.getElementById(this.dataset.target);
+            if (!input) return;
 
-    if (clearBtn && questionSelect && answerInput) {
-        clearBtn.addEventListener('click', function () {
-            questionSelect.selectedIndex = 0; // セレクトを初期状態に
-            answerInput.value = ''; // 答えをクリア
+            if (input.type === 'password') {
+                input.type = 'text';
+                this.textContent = '🙈';
+            } else {
+                input.type = 'password';
+                this.textContent = '👁';
+            }
         });
-    }
+    });
 });
 </script>
 
@@ -164,5 +168,21 @@ document.addEventListener('DOMContentLoaded', function () {
 .btn-clear-question:hover {
   background-color: #606c76;
 }
+.password-wrap {
+    display: flex;
+    align-items: center;      /* ★ 縦中央揃え */
+    position: relative;
+}
 
+.password-wrap .input {
+    flex: 1;
+}
+
+.toggle-password {
+    margin-left: -36px;       /* ★ input 内に重ねる */
+    cursor: pointer;
+    font-size: 2.0rem;
+    user-select: none;
+    line-height: 1;
+}
 </style>

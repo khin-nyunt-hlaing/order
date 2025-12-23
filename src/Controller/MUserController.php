@@ -297,11 +297,18 @@ public function index()
 
         //パスワード？
         //質問リスト    
-        $questionList = [
-            '1' => '好きな食べ物は？',
-            '2' => '母親の旧姓は？',
-            '3' => '初めて飼ったペットの名前は？',
-        ];
+        // 秘密の質問（汎用マスタから取得）
+        $MQuestion = $this->fetchTable('MKubun');
+        $questionList = $MQuestion->find('list',
+            keyField: 'kubun_value',
+            valueField: 'kubun_name'
+        )
+        ->where([
+            'kubun_cd' => 'MU',
+            'del_flg' => 0
+        ])
+        ->order(['disp_no' => 'ASC'])
+        ->toArray();
 
         //配食パターン一覧、整形
         $mPatterns = $this->fetchTable('MDeliveryPattern')->find('list', 
@@ -503,6 +510,19 @@ public function edit($id = null)
         $serviceList[$id] = $id . ' / ' . $name;
     }
 
+    // 秘密の質問（汎用マスタから取得）
+    $MQuestion = $this->fetchTable('MKubun');
+    $questionList = $MQuestion->find('list',
+        keyField: 'kubun_value',
+        valueField: 'kubun_name'
+    )
+    ->where([
+        'kubun_cd' => 'MU',
+        'del_flg' => 0
+    ])
+    ->order(['disp_no' => 'ASC'])
+    ->toArray();
+
 
     //配食パターン一覧、整形
     $mPatterns = $this->fetchTable('MDeliveryPattern')->find('list', 
@@ -589,7 +609,7 @@ public function edit($id = null)
             $this->Flash->error(__('入力内容にエラーがあります。内容をご確認ください。'));
             Log::debug('[edit] バリデーションエラー: ' . print_r($mUser->getErrors(), true));
             $this->set(compact(
-            'mUser',  'mUserGroups','mServices', 'serviceList','selectedGroupId',
+            'mUser',  'mUserGroups','mServices', 'serviceList','selectedGroupId','questionList',
             'mPatterns', 'patternList','statusList', 'defaultLeadTime',
             'minLeadTime', 'viewedUsers', 'selectedDispUserIds'));
             $this->set('mode', 'edit');
@@ -622,9 +642,9 @@ public function edit($id = null)
              $selectedGroupId = null;
 
             $this->set(compact(
-            'mUser',  'mUserGroups','mServices', 'serviceList','selectedGroupId',
+            'mUser',  'mUserGroups','mServices', 'serviceList','questionList','selectedGroupId',
             'mPatterns', 'patternList','statusList', 'defaultLeadTime',
-            'minLeadTime', 'viewedUsers', 'selectedDispUserIds'));
+            'minLeadTime', 'viewedUsers','selectedGroupId', 'selectedDispUserIds'));
             $this->set('mode', 'edit');
             return $this->render('add_edit'); // ← return を忘れない
         }
@@ -664,7 +684,7 @@ public function edit($id = null)
        
     // ビューに渡す
     $this->set(compact(
-            'mUser',  'mUserGroups','mServices', 'serviceList',
+            'mUser',  'mUserGroups','mServices', 'serviceList','questionList',
             'mPatterns', 'patternList','statusList', 'defaultLeadTime',
             'minLeadTime', 'viewedUsers','selectedGroupId', 'selectedDispUserIds'));
     
@@ -707,6 +727,7 @@ public function request()
         $user = $this->MUser->find()
             ->where([
                 'user_id' => $user_id,
+                'del_flg' => 0
                 
             ])
             ->first();
@@ -784,7 +805,7 @@ public function reset()
         $newPass = $data['loginpass'] ?? '';
         $confirmPass = $data['confirmloginpass'] ?? '';
         $question = $data['secret_question'] ?? null;
-        $answer = $data['passanswer'] ?? null;
+        $answer   = $data['answer'] ?? null;
 
         $hasDigit  = preg_match('/\d/', $newPass);// 半角数字
         $hasUpper  = preg_match('/[A-Z]/', $newPass);// 半角英語大文字
@@ -797,8 +818,10 @@ public function reset()
             return;
         }
 
+        $errors = [];
+
         if (strlen($newPass) > 100) {
-            $error['loginpass'][] = '入力可能桁数を超えています。';
+            $errors['loginpass'][] = '入力可能桁数を超えています。';
         }
 
         if (!empty($errors)) {
