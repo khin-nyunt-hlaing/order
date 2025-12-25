@@ -29,54 +29,119 @@ class TAnnounceController extends AppController
      * お知らせのコントローラ
      */
 public function index()
-    {
-        /**
-         * Index method
-         * 初期表示・検索処理を行います。
-         *
-         * @return \Cake\Http\Response|null|void Renders view
-         */
+{
+    // =========================
+    // 検索条件（GET）
+    // =========================
+    $q = $this->request->getQuery();
 
-        // データ取得（最終部分）
-        $queryParam = $this->request->getQuery('show_deleted');
-        $showDeleted = isset($queryParam) && $queryParam === '1';
-        $selectedDiv = $this->request->getData('announce_div'); // ✅ これを追加
+    $selectedDiv   = $q['announce_div'] ?? null;
+    $title         = $q['title'] ?? null;
+    $startFrom     = $q['start_from'] ?? null;
+    $startTo       = $q['start_to'] ?? null;
+    $facilityGroup = $q['facility_group'] ?? null;
+    $serviceId     = $q['use_service_id'] ?? null;
+    $includeEnd    = ($q['include_end'] ?? '') === '1';
 
-        //件数
-        $query = $this->TAnnounce->find()
-            ->where($showDeleted ? [] : ['del_flg' => '0'])
-            ->orderBy(['announce_start_date' => 'DESC']);
 
-            if (!empty($selectedDiv)) {
-                $query->where(['announce_div' => $selectedDiv]);
+    $query = $this->TAnnounce->find()
+        ->distinct(['TAnnounce.announce_id'])
+        ->leftJoinWith('TAnnounceUser.MUser')
+        ->where(['TAnnounce.del_flg' => '0'])
+        ->order(['TAnnounce.announce_start_date' => 'DESC']);
+
+    // =========================
+    // 条件適用
+    // =========================
+    if (!empty($selectedDiv)) {
+        $query->where(['TAnnounce.announce_div' => $selectedDiv]);
+    }
+
+    if (!empty($title)) {
+        $query->where([
+            'TAnnounce.announce_title LIKE' => '%' . trim($title) . '%'
+        ]);
+    }
+
+    if (!empty($startFrom)) {
+        $query->where([
+            'TAnnounce.announce_start_date >=' => $startFrom
+        ]);
+    }
+
+    if (!empty($startTo)) {
+        $query->where([
+            'TAnnounce.announce_start_date <=' => $startTo
+        ]);
+    }
+
+    // 掲載終了を含めない
+    if (!$includeEnd) {
+        $query->where([
+            'OR' => [
+                'TAnnounce.announce_end_date IS' => null,
+                'TAnnounce.announce_end_date >=' => date('Y-m-d')
+            ]
+        ]);
+    }
+
+    // 施設グループ（user_id 先頭一致）
+    if (!empty($facilityGroup)) {
+        $query->where(function ($exp) use ($facilityGroup) {
+            return $exp->like('MUser.user_id', $facilityGroup . '%');
+        });
+    }
+
+    // 発注サービス
+    if (!empty($serviceId)) {
+        $query->where([
+            'MUser.use_service_id' => $serviceId
+        ]);
+    }
+
+    // =========================
+    // 件数・ページング
+    // =========================
+    $totalCount = $query->count();
+    $tAnnounce  = $this->paginate($query);
+
+    // =========================
+    // 区分リスト
+    // =========================
+    $announceDivList = $this->fetchTable('MAnnounceDiv')
+        ->find('list',
+            keyField: 'announce_div',
+            valueField: 'announce_div_name'
+        )
+        ->where(['del_flg' => '0'])
+        ->order(['disp_no' => 'ASC'])
+        ->toArray();
+
+    // =========================
+    // 発注サービスリスト
+    // =========================
+    $MServiceList = $this->fetchTable('MService')
+        ->find('list',
+            keyField: 'use_service_id',
+            valueField: 'service_name'
+        )
+        ->where(['del_flg' => 0, 'use_service_id IN' => [2,3,4]])
+        ->order(['disp_no' => 'ASC'])
+        ->toArray();
+
+    // =========================
+    // 添付ファイルMap
+    // =========================
+    $attachedFilesMap = [];
+    foreach ($tAnnounce as $row) {
+        $list = [];
+        for ($i = 1; $i <= 5; $i++) {
+            $fname = $row->{"temp_filename{$i}"} ?? null;
+            if ($fname) {
+                $list[] = ['name' => (string)$fname];
             }
-
-        $totalCount = $query->count(); // ← 全件数を取得（ページング前）
-        $tAnnounce = $this->paginate($query);
-        
-        // お知らせ区分 区分リスト（表示再現のため）
-        $announceDivList = $this->fetchTable('MAnnounceDiv')->find('list', 
-            keyField : 'announce_div',
-            valueField : 'announce_div_name'
-        )->where(['del_flg' => '0'])->order(['disp_no' => 'ASC'])->toArray();
-
-        // ★ 添付ファイル配列を作成（モーダル処理）
-            $attachedFilesMap = [];
-            foreach ($tAnnounce as $row) {
-                $list = [];
-                for ($i = 1; $i <= 5; $i++) {
-                    $fname = $row->{"temp_filename{$i}"} ?? null; // フィールド名は実DBに合わせて
-                    if (!empty($fname)) {
-                        // 認可付きDLにしたい場合は download アクションURLに差し替え
-                        $list[] = [
-                          'name' => (string)$fname,
-                        ];
-                    }
-                }
-                $attachedFilesMap[$row->announce_id] = $list;
-            }
-            
-
+        }
+        $attachedFilesMap[$row->announce_id] = $list;
         if ($this->request->is('post')) {
             $DISPuTable = $this->fetchTable('MDispUser');
             $action = $this->request->getData('action'); // どのボタンが押されたか（add/edit/delete）
@@ -173,15 +238,28 @@ public function index()
                     return $this->redirect(['action' => 'index']);
                 }
             }
-
-        }
-        Log::debug('[announce] attachedFilesMap=' . print_r($attachedFilesMap, true));
-        Log::debug(json_encode($attachedFilesMap, JSON_UNESCAPED_UNICODE));
-
-        $this->set(compact('tAnnounce', 'totalCount','announceDivList','selectedDiv'));
-        $this->set('attachedFilesMap', $attachedFilesMap);
-        
+            }
+            Log::debug('[announce] attachedFilesMap=' . print_r($attachedFilesMap, true));
+            Log::debug(json_encode($attachedFilesMap, JSON_UNESCAPED_UNICODE)); 
     }
+    $this->set(compact(
+        'tAnnounce',
+        'totalCount',
+        'announceDivList',
+        'MServiceList',
+        'selectedDiv',
+        'title',
+        'startFrom',
+        'startTo',
+        'facilityGroup',
+        'serviceId',
+        'includeEnd'
+    ));
+
+    $this->set('attachedFilesMap', $attachedFilesMap);
+}
+
+
 
     
 /**

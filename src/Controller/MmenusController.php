@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace App\Controller;
 
 use App\Controller\AppController;
+use Cake\Datasource\ConnectionManager;
 use Cake\Database\Expression\FunctionExpression;
 use Cake\Database\Expression\IdentifierExpression;
 use Cake\Log\Log; 
@@ -20,52 +21,124 @@ class MmenusController extends AppController
      *
      * @return \Cake\Http\Response|null|void Renders view
      */
+
+
 public function index()
 {
-    // ▼ メニュー（0だけ除外、1/2はそのまま表示。サービス5は配信先で集約）
-    $menus = $this->fetchMenusForCurrentUser();
+    // ===== ログインユーザー =====
+    $identity = $this->request->getAttribute('identity');
+    $useServiceId = (string)($identity?->get('use_service_id') ?? '');
 
-    // ▼ お知らせ区分（プルダウン用）
-    $announceDivList = $this->fetchTable('MAnnounceDiv')->find(
-        'list',
-        keyField: 'announce_div',
-        valueField: 'announce_div_name'
-    )
-    ->where(['del_flg' => '0'])
-    ->order(['disp_no' => 'ASC'])
-    ->toArray();
+    // ===== メニュー取得（権限OKのみ）=====
+    $menus = $this->fetchTable('MMenu')
+        ->find()
+        ->innerJoin(
+            ['Auth' => 'M_AUTH'],
+            [
+                'Auth.menu_id = MMenu.menu_id',
+                'Auth.use_service_id' => $useServiceId,
+                'Auth.use_div' => 1,
+            ]
+        )
+        ->where(['MMenu.del_flg' => 0])
+        ->order(['MMenu.disp_no' => 'ASC'])
+        ->all();
 
-    // ▼ 区分（GETから取得）
-    $selectedDiv = $this->request->getQuery('announce_div') ?: null;
+    // ===== 3階層に整形 =====
+    $menuTree = [];
+    foreach ($menus as $m) {
+        $menuTree[$m->parent_menu_name][$m->sub_menu_name][] = $m;
+    }
 
-    // ▼ お知らせ（件数 + 明細）※引数を渡す
-    $announce = $this->loadAnnounce($selectedDiv);
+    // ===== お知らせ =====
+    $announces = $this->fetchTable('TAnnounce')
+        ->find()
+        ->where(['del_flg' => 0])
+        ->order(['announce_start_date' => 'DESC'])
+        ->all();
 
-    // ▼ お知らせ（件数 + 明細）※ loadosirase() の戻りをそのまま使う
-    ['tAnnounce' => $tAnnounce] = $this->loadAnnounce($selectedDiv);
-
-    // ★ 添付ファイル配列を作成（モーダル処理）
-            $attachedFilesMap = [];
-            foreach ($tAnnounce as $row) {
-                $list = [];
-                for ($i = 1; $i <= 5; $i++) {
-                    $fname = $row->{"temp_filename{$i}"} ?? null; // フィールド名は実DBに合わせて
-                    if (!empty($fname)) {
-                        // 認可付きDLにしたい場合は download アクションURLに差し替え
-                        $list[] = [
-                          'name' => (string)$fname,
-                        ];
-                    }
-                }
-                $attachedFilesMap[$row->announce_id] = $list;
+    // ===== 添付ファイル有無 =====
+    foreach ($announces as $a) {
+        $a->has_file = false;
+        for ($i = 1; $i <= 5; $i++) {
+            if (!empty($a->{"temp_filename{$i}"})) {
+                $a->has_file = true;
+                break;
             }
-            // Log::debug('[probe][$downloadTargets] ' . json_encode($attachedFilesMap, JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT));
-            
-    // ▼ ビューへ
-    $this->set(compact('menus', 'announceDivList', 'selectedDiv'));
-    $this->set($announce); // $announce の中身は ['tAnnounce' => ..., 'count' => ...]
-    $this->set('attachedFilesMap', $attachedFilesMap);
+        }
+    }
+
+    // ==================================================
+    // ===== 次回締切日・該当献立週
+    // ===== ルール：
+    // =====   献立週(月) − 2週間 → 祝日なら前営業日
+    // ==================================================
+    $conn = ConnectionManager::get('default');
+
+    // 次回の献立週を取得（開始日が未来のもの）
+    $term = $conn->execute(
+        "
+        SELECT TOP 1
+            start_date,
+            end_date
+        FROM dbo.M_TERM
+        WHERE start_date >= CAST(GETDATE() AS date)
+        ORDER BY start_date ASC
+        "
+    )->fetch('assoc');
+
+    // 初期値
+    $nextDeadline = '-';
+    $menuWeek     = '-';
+
+    if ($term) {
+        $startDate = new \DateTimeImmutable($term['start_date']);
+
+        // 仮締切日：献立週(月) − 2週間
+        $deadline = $startDate->modify('-14 days');
+
+        // 祝日・休日なら前営業日に補正
+        while (true) {
+            $row = $conn->execute(
+                "
+                SELECT holiday_flg
+                FROM dbo.M_CALENDAR
+                WHERE calendar_date = :d
+                ",
+                ['d' => $deadline->format('Y-m-d')]
+            )->fetch('assoc');
+
+            // holiday_flg = 1 → 休日
+            if ($row && (int)$row['holiday_flg'] === 1) {
+                $deadline = $deadline->modify('-1 day');
+                continue;
+            }
+
+            break; // 営業日
+        }
+
+        // View用
+        $nextDeadline = $deadline->format('Y/m/d');
+        $menuWeek =
+            (new \DateTimeImmutable($term['start_date']))->format('Y/m/d')
+            . ' ～ ' .
+            (new \DateTimeImmutable($term['end_date']))->format('Y/m/d');
+    }
+
+    // ===== Viewへ =====
+    $this->set([
+        'menuTree'     => $menuTree,
+        'announces'    => $announces,
+        'count'        => $announces->count(),
+        'nextDeadline' => $nextDeadline,
+        'menuWeek'     => $menuWeek,
+    ]);
 }
+
+
+
+
+
 //お知らせ切替処理
 private function loadAnnounce(?string $selectedDiv = null): array
 {

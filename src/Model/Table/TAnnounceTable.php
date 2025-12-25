@@ -40,6 +40,10 @@ class TAnnounceTable extends AppTable
         $this->setTable('t_announce');
         $this->setDisplayField('ANNOUNCE_TEXT');
         $this->setPrimaryKey('announce_id');
+
+        $this->hasMany('TAnnounceUser', [
+            'foreignKey' => 'announce_id',
+        ]);
     }
 
 

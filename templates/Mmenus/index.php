@@ -1,199 +1,299 @@
-<h3 class="cuttitlebox" style='font-size:1.5em;'>メインメニュー</h3>
+<h3 class="cuttitlebox" style="font-size:1.4em;">メインメニュー</h3>
 
-<div class="menu content">
-    <?php foreach ($menus as $menu): ?>
-        <?php
-            // 初期値はリンクなし
-            $link = null;
+<div class="menu-white-area">
 
-            // 配列かオブジェクトかを吸収
-            $controller = is_array($menu) ? ($menu['controller'] ?? null) : ($menu->controller ?? null);
-            $action     = is_array($menu) ? ($menu['action'] ?? null)     : ($menu->action ?? null);
-            $menuName   = is_array($menu) ? ($menu['menu_name'] ?? null)  : ($menu->menu_name ?? null);
-            $useDiv     = is_array($menu) ? ($menu['use_div'] ?? null)    : ($menu->use_div ?? null);
+  <!-- ===== 親メニュー ===== -->
+  <div class="main-menus">
+    <?php foreach ($menuTree as $parent => $subs): ?>
+      <div class="parent-block">
 
-
-            if ($menu->action === 'logout') {
-                $link = ['controller' => 'MUser', 'action' => 'logout', 'plugin' => false];
-            }
-
-            // CONTROLLERとACTIONが設定されている場合、かつコントローラーが存在する場合のみリンクを作成
-            if (!empty($menu->controller) && !empty($menu->action)) {
-                $controllerClass = 'App\\Controller\\' . $menu->controller . 'Controller';
-                
-
-            // controller / action があればリンク作成（まずは存在チェックだけでOK）
-            if (!$link && !empty($controller) && !empty($action)) {
-                $link = ['controller' => $controller, 'action' => $action, 'plugin' => false];
-            }
-            }
-            // use_div=1 だけ活性（それ以外は見せるけど無効）
-            $disabled = ($useDiv !== 1);
-        ?>
-
-        <?php if (!empty($menu['menu_name'])): ?>
-            <?php if (!empty($link)): ?>
-                <!-- リンクがある場合 -->
-                <?= $this->Html->link(
-                    h($menu['menu_name']),
-                    $link,
-                    ['class' => 'menu-button']
-                ) ?>
-            <?php else: ?>
-                <!-- リンクがない場合は文字だけ表示 -->
-                <span class="menu-button"><?= h($menu['menu_name']) ?></span>
-            <?php endif; ?>
-        <?php endif; ?>
-    <?php endforeach; ?>
-</div>
-           
-<div style="display:flex; align-items: center; height:60px;">
-<h3 class="cuttitlebox" style="margin-left:20px;">お知らせ</h3>
-<p class="p1"style="margin-left:auto;">件数  <?= $count ?>件</P1>
-</div>
-<div class="Announcebox">
-<table border="1" cellpadding="5" cellspacing="0">
-    <thead>
-        <tr>
-            <th style="width:20%;">日付</th>
-            <th style="display:flex; align-items: center;">
-                <label style=" width:70%;">区分</label>
-                <?= $this->Form->select('announce_div', $announceDivList, [
-                    'empty' => 'すべて',               // ← 空値 ""
-                    'value' => $selectedDiv ?? '',   // ← 現在値を保持
-                    'style' => 'width:100%; margin-bottom:0 !important;',
-                    'id'    => 'announceDiv'
-                ]) ?>
-            </th>
-            <th style="width:60%;">お知らせ</th>
-        </tr>
-    </thead>
-    <tbody>
-        <?php foreach ($tAnnounce as $announce): ?>
-            <?php
-                $modalId = 'modal-announce-' . $announce->announce_id;
-                $title = $announce->announce_title ?? 'タイトル未設定';
-
-                $attachedFiles = [];
-                for ($i = 1; $i <= 5; $i++) {
-                    $prop = "temp_filename{$i}";
-                    $fname = $announce->$prop ?? null;
-                    if (!empty($fname)) {
-                        $attachedFiles[] = [
-                            // 公開URLは announce 配下。ファイル名だけ URL エンコード
-                            'url'  => $this->Url->assetUrl('uploads/announce/' . rawurlencode($fname)),
-                            'name' => $fname, // 表示側で h() する
-                        ];
-                    }
-                }
-            ?>
-    <tr>
-        <td><?= h($announce->announce_start_date ?? '') ?></td>
-        <td><?= h($announceDivList[$announce->announce_div] ?? '') ?></td>
-        <td>
-        <!-- 開くトリガー -->
-        <button type="button"
-                class="openModalBtn"
-                data-target="<?= h($modalId) ?>"
-                aria-controls="<?= h($modalId) ?>"
-                aria-haspopup="dialog"
-                style="cursor:pointer; color:blue; text-decoration:underline; background:none; border:none; padding:0;">
-            <?= h($title) ?>
+        <button type="button" class="parent-btn" data-parent="<?= h($parent) ?>">
+          <?= h($parent) ?>
         </button>
 
-        <!-- モーダル本体（element 呼び出し） -->
-        <?= $this->element('modal_box', [
-            'id'            => $modalId,
-            'announceTitle' => $announce->announce_title,
-            'announceText'  => $announce->announce_text,
-            'attachedFiles' => $attachedFiles
-        ]) ?>
-        </td>
-    </tr>
-<?php endforeach; ?>
+        <!-- 親の直下 -->
+        <div class="submenu-area"></div>
 
-    </tbody>
-</table>
-        </div>
-    
-    
+      </div>
+    <?php endforeach; ?>
+  </div>
+
+  <!-- ===== 付加情報 ===== -->
+  <div class="menu-info">
+    <p class="deadline">
+      次回締切日：<?= h($nextDeadline ?? '-') ?>
+    </p>
+    <p class="menu-week">
+      該当献立週：<?= h($menuWeek ?? '-') ?>
+    </p>
+  </div>
+
+  <!-- ===== お知らせ ===== -->
+  <div class="notice-header">
+    <span class="notice-title">お知らせ</span>
+    <span class="notice-count">件数 <?= h($count) ?> 件</span>
+  </div>
+
+  <div class="scrollbox">
+    <table class="styled-table">
+      <thead>
+        <tr>
+          <th>日付</th><th>区分</th><th>お知らせ</th><th>添付</th>
+        </tr>
+      </thead>
+      <tbody>
+        <?php if ($count === 0): ?>
+          <tr><td colspan="4" style="text-align:center;">データがありません</td></tr>
+        <?php else: foreach ($announces as $a): ?>
+          <tr>
+            <td><?= h($a->announce_start_date) ?></td>
+            <td><?= h($a->announce_div) ?></td>
+            <td><?= h($a->announce_title) ?></td>
+            <td><?= !empty($a->has_file) ? 'あり' : '' ?></td>
+          </tr>
+        <?php endforeach; endif; ?>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+
 <style>
-    .menu {
-        display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: 10px;
-    }
+/* ===== 全体 ===== */
+.menu-white-area{
+  background:#fff;
+  padding:24px;
+}
 
-    .menu-button {
-        display: inline-block;
-        padding: 15px 25px;
-        background-color: #e6f7ff;
-        border: 2px solid #aaa;
-        text-decoration: none;
-        color: #333;
-        font-size: 18px;
-        text-align: center;
-    }
+.main-menus{
+  display:flex;
+  justify-content:center;
+  gap:24px;
+  margin-bottom:20px;
+}
 
-    .menu-button:hover {
-        background-color: #b3e0ff;
-    }
-    .Announcebox{
-        max-height: 300px; 
-        overflow-y: auto; 
-        border: 3px solid #ccc; 
-        padding: 10px;
-        background: white;
-    }
-    .p1{
-        text-align: right;
-        margin-bottom:0px;
-    }
+/* ★ 親ブロックは左基準 */
+.parent-block{
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+}
+
+/* ★ 親ボタンだけ中央 */
+.parent-btn{
+  width:150px;
+  height:32px;
+  box-sizing:border-box;              /* ★ 必須 */
+  border-radius:6px;
+  border:1px solid #90caf9;
+  background:#e3f2fd;
+  font-size:12px;
+  font-weight:700;
+  color:#0d47a1;
+  text-align:center;
+  cursor:pointer;
+
+  /* ★ 通常時にも shadow を確保（透明） */
+  box-shadow:0 3px 8px rgba(21,101,192,0);
+
+  transition:
+    background .2s ease,
+    color .2s ease,
+    box-shadow .2s ease;
+}
+
+.parent-btn:hover{
+  background:#bbdefb;
+}
+
+.parent-btn.active{
+  background:#1565c0;
+  color:#fff;
+
+
+  box-shadow:0 3px 8px rgba(21,101,192,.3);
+}
+
+
+.submenu-area{
+  margin-top:8px;
+}
+
+
+.sub-block{
+  display:flex;
+  gap:6px;
+  margin-bottom:6px;
+}
+
+
+.sub-btn{
+  width:140px;
+  height:28px;
+  border-radius:5px;
+  border:1px solid #90caf9;
+  background:#e3f2fd;
+  font-size:9px;
+  font-weight:600;
+  color:#0d47a1;
+  text-align:center;
+  cursor:pointer;
+}
+
+/* menu */
+.menu-list{
+  display:none;
+  flex-direction:column;
+  text-align:center;
+}
+
+.menu-list.show{
+  display:flex;
+}
+
+
+.menu-link{
+  width:140px;
+  height:28px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding-left:0;
+  margin-bottom:4px;
+  border-radius:5px;
+  border:1px solid #cfd8dc;
+  background:#fafafa;
+  font-size:9px;
+  color:#000;
+  text-decoration:none;
+}
+
+.menu-link:hover{
+  background:#e3f2fd;
+}
+
+.notice-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin:12px 0;
+}
+
+.notice-title,
+.notice-count{
+    font-size:14px;
+    font-weight:600;
+    color:#555;
+}
+.menu-info{
+    margin: 12px 0 20px 20px;
+}
+
+.menu-info p{
+    margin: 2px 0;
+    font-size: 0.95rem;
+}
+
+.menu-info .deadline{
+    color: #d32f2f;
+    font-size:14px;
+    font-weight:600;
+}
+
+.menu-info .menu-week{
+    color: #d32f2f;
+    font-size:14px;
+    font-weight:600;
+}
+
+.scrollbox {
+    max-height: 400px;
+    overflow-y: auto;
+    position: relative;
+}
+
+.styled-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+}
+
 </style>
 <script>
-    <?php $this->Html->scriptStart(['block' => true]); ?>
-    // 開く
-    document.addEventListener('click', (e) => {
-    const btn = e.target.closest('.openModalBtn');
-    if (!btn) return;
-    const id = btn.dataset.target;               // 例: "modal-announce-123"
-    const modal = document.getElementById(id);
-    if (!modal) return;
-    modal.hidden = false;
-
-    // 初期フォーカス（任意）
-    const focusable = modal.querySelector('[data-close]') || modal;
-    focusable.focus();
-    });
-
-    // 閉じる（×ボタンや背景クリック）
-    document.addEventListener('click', (e) => {
-    const close = e.target.closest('[data-close]');
-    if (!close) return;
-    const modal = close.closest('.modal');
-    if (modal) modal.hidden = true;
-    });
-
-    // Escで全部閉じる
-    document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-        document.querySelectorAll('.modal:not([hidden])')
-        .forEach(m => m.hidden = true);
-    }
-    });
-    <?php $this->Html->scriptEnd(); ?>
+const BASE_URL = "<?= $this->Url->build('/', ['fullBase' => false]) ?>";
+const menuTree = <?= json_encode($menuTree, JSON_UNESCAPED_UNICODE) ?>;
 </script>
-<!-- お知らせ区分に従って表示 -->
+
 <script>
-    document.getElementById('announceDiv').addEventListener('change', function() {
-        const selected = this.value;
-        const baseUrl = window.location.pathname;
-        const params = new URLSearchParams(window.location.search);
-        if (selected) {
-            params.set('announce_div', selected);
-        } else {
-            params.delete('announce_div');
-        }
-        window.location.href = `${baseUrl}?${params.toString()}`;
+document.querySelectorAll('.parent-btn').forEach(btn => {
+  btn.type = 'button';
+
+  btn.addEventListener('click', () => {
+
+    // active 切替
+    document.querySelectorAll('.parent-btn')
+      .forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+
+    // submenu 全消去
+    document.querySelectorAll('.submenu-area')
+      .forEach(a => a.innerHTML = '');
+
+    const area = btn.nextElementSibling;
+    const subs = menuTree[btn.dataset.parent];
+
+    if (!subs) return; // 念のため
+
+    Object.entries(subs).forEach(([subName, menus]) => {
+
+      // ===== sub_menu_name が空の場合 =====
+      if (!subName) {
+        menus.forEach(m => {
+          area.insertAdjacentHTML('beforeend', `
+            <a class="menu-link"
+               href="${BASE_URL}${m.controller}/${m.action}">
+              ${m.menu_name}
+            </a>
+          `);
+        });
+        return;
+      }
+
+      // ===== sub_menu_name がある場合 =====
+      const row = document.createElement('div');
+      row.className = 'sub-block';
+
+      const subBtn = document.createElement('button');
+      subBtn.type = 'button';
+      subBtn.className = 'sub-btn';
+      subBtn.textContent = subName;
+
+      const list = document.createElement('div');
+      list.className = 'menu-list';
+
+      menus.forEach(m => {
+        list.insertAdjacentHTML('beforeend', `
+          <a class="menu-link"
+             href="${BASE_URL}${m.controller}/${m.action}">
+            ${m.menu_name}
+          </a>
+        `);
+      });
+
+      subBtn.addEventListener('click', () => {
+        document.querySelectorAll('.menu-list')
+          .forEach(l => l.classList.remove('show'));
+        list.classList.add('show');
+      });
+
+      row.appendChild(subBtn);
+      row.appendChild(list);
+      area.appendChild(row);
     });
+  });
+});
 </script>
+
+
+

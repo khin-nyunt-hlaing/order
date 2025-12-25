@@ -112,37 +112,47 @@ class MAnnounceDivController extends AppController
 {
     $mAnnounceDiv = $this->MAnnounceDiv->newEmptyEntity();
 
-    // ★ POST前の初期表示時のみ初期値をセット
+    // ✅ 次の自動連番（表示専用）
+    $next = $this->MAnnounceDiv->find()
+        ->select(['max_div' => 'MAX(announce_div)'])
+        ->first();
+    $nextAnnounceDiv = ($next->max_div ?? 0) + 1;
+
+    // 初期表示
     if (!$this->request->is('post')) {
         $mAnnounceDiv->disp_no = 0;
     }
 
     try {
         if ($this->request->is('post')) {
-            $mAnnounceDiv = $this->MAnnounceDiv->patchEntity($mAnnounceDiv, $this->request->getData());
+            $data = $this->request->getData();
+
+            // ❌ announce_div は保存に使わない
+            unset($data['announce_div']);
+
+            $mAnnounceDiv = $this->MAnnounceDiv->patchEntity($mAnnounceDiv, $data);
 
             $loginUserId = $this->request->getAttribute('identity')->get('user_id');
-            $mAnnounceDiv->del_flg = "0";
+            $mAnnounceDiv->del_flg = '0';
             $mAnnounceDiv->create_user = $loginUserId;
             $mAnnounceDiv->update_user = $loginUserId;
 
             if ($this->MAnnounceDiv->save($mAnnounceDiv)) {
-                $this->Flash->success(__('登録しました。'));
+                $this->Flash->success('登録しました。');
                 return $this->redirect(['action' => 'index']);
-            } else {
-                $this->Flash->error(__('登録に失敗しました。'));
             }
+            $this->Flash->error('登録に失敗しました。');
         }
     } catch (Exception $e) {
         $this->Flash->error('システムエラーです。登録に失敗しました。');
-        Log::error('[システムエラー] ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+        Log::error($e->getMessage());
     } finally {
-        // disp_no は上書きしない
-        $this->set(compact('mAnnounceDiv'));
+        $this->set(compact('mAnnounceDiv', 'nextAnnounceDiv'));
         $this->set('mode', 'add');
         $this->render('add_edit');
     }
 }
+
 
     /**
      * Edit method
@@ -151,30 +161,36 @@ class MAnnounceDivController extends AppController
      * @return \Cake\Http\Response|null|void Redirects on successful edit, renders view otherwise.
      * @throws \Cake\Datasource\Exception\RecordNotFoundException When record not found.
      */
-    public function edit($id = null)
-    {
-        try{
-            $mAnnounceDiv = $this->MAnnounceDiv->get($id);
-            if ($this->request->is(['post', 'put', 'patch'])) {
-                $mAnnounceDiv = $this->MAnnounceDiv->patchEntity($mAnnounceDiv, $this->request->getData());
-                $loginUserId = $this->request->getAttribute('identity')->get('user_id');
-                $mAnnounceDiv->update_user = $loginUserId;
-                if ($this->MAnnounceDiv->save($mAnnounceDiv)) {
-                    $this->Flash->success(__('更新しました。'));
-                    return $this->redirect(['action' => 'index']);
-                }
-                $this->Flash->error(__('更新に失敗しました。'));
+public function edit($id = null)
+{
+    try {
+        $mAnnounceDiv = $this->MAnnounceDiv->get($id);
+
+        if ($this->request->is(['post', 'put', 'patch'])) {
+            $data = $this->request->getData();
+
+            // ❌ IDは変更不可
+            unset($data['announce_div']);
+
+            $mAnnounceDiv = $this->MAnnounceDiv->patchEntity($mAnnounceDiv, $data);
+
+            $loginUserId = $this->request->getAttribute('identity')->get('user_id');
+            $mAnnounceDiv->update_user = $loginUserId;
+
+            if ($this->MAnnounceDiv->save($mAnnounceDiv)) {
+                $this->Flash->success('更新しました。');
+                return $this->redirect(['action' => 'index']);
             }
-            Log::debug(':チェックマーク_緑: edit対象のデータ: ' . print_r($mAnnounceDiv->toArray(), true));
-
-        } catch (Exception $e) {
-            $this->Flash->error('システムエラーです。更新に失敗しました。');
-            Log::error('[システムエラー] ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
-        } finally{
-            $this->set(compact('mAnnounceDiv'));
-            $this->set('mode', 'edit');
-            $this->render('add_edit'); // ← 共通テンプレートを呼び出す
-
+            $this->Flash->error('更新に失敗しました。');
         }
+    } catch (Exception $e) {
+        $this->Flash->error('システムエラーです。更新に失敗しました。');
+        Log::error($e->getMessage());
+    } finally {
+        $this->set(compact('mAnnounceDiv'));
+        $this->set('mode', 'edit');
+        $this->render('add_edit');
     }
+}
+
 }

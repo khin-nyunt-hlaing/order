@@ -20,6 +20,7 @@
                     <th>お知らせ区分</th>
                     <th>お知らせ区分名称</th>
                     <th>表示順</th>
+                    <th>削除</th>
                 </tr>
             </thead>
             <tbody>
@@ -33,9 +34,17 @@
                           ]) ?>
                      </td>
                     <!-- 各データ列 -->
-                    <td><?= h($mAnnounceDiv->announce_div) ?></td>
+                     <td>
+                        <?= $this->Html->link(
+                            h($mAnnounceDiv->announce_div),
+                            ['action' => 'edit', $mAnnounceDiv->announce_div],
+                            ['class' => 'link-edit']
+                        ) ?>
+                    </td>
+                    
                     <td><?= h($mAnnounceDiv->announce_div_name) ?></td>
                     <td><?= h($mAnnounceDiv->disp_no) ?></td>
+                    <td style="text-align:center;"><?= $mAnnounceDiv->del_flg == 1 ? '✓' : '' ?></td>
                 </tr>
                 <?php endforeach; ?>
             </tbody>
@@ -44,8 +53,8 @@
             <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 20px;">
                      <!-- :下向き三角矢印: 操作ボタン -->
                         <div class="leftbox">
-                        <?= $this->Form->button('追加', ['name' => 'action', 'value' => 'add']) ?>
-                        <?= $this->Form->button('更新', ['name' => 'action', 'value' => 'edit']) ?>
+                        <?= $this->Form->button('登録', ['name' => 'action', 'value' => 'add']) ?>
+                        <!-- <?= $this->Form->button('更新', ['name' => 'action', 'value' => 'edit']) ?> -->
                         <?= $this->Form->button('削除', [
                             'name' => 'action',
                             'value' => 'delete',
@@ -73,6 +82,15 @@
     .highlight-row {
         background-color: #D0EBFF; /* 濃いめの青背景に変更 */
     }
+    .link-edit {
+    color: #0000ee;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.link-edit:hover {
+    color: #551a8b;
+}
 </style>
 <script>
     $(document).ready(function() {

@@ -12,12 +12,12 @@
             </div>
             <?= $this->Form->control('announce_div', [
                 'label' => false,
-                'id' => 'announce_div',
                 'type' => 'text',
-                'required' => true,
-                'readonly' => true, // ←常にグレーアウト
-                'value' => $mAnnounceDiv->announce_div, // ←addは＋1済、editは既存値
-                'style' => ($mode === 'add') ? 'display:none;' : 'background-color: #eee;' // グレー背景
+                'readonly' => true,
+                'value' => ($mode === 'add')
+                    ? $nextAnnounceDiv
+                    : $mAnnounceDiv->announce_div,
+                'style' => 'background-color:#eee;'
             ]) ?>
             </div>
             <div class="input-range">

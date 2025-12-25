@@ -242,7 +242,16 @@
     select[readonly] {
     background-color: #eee !important;
     color: #555 !important;
+    
     cursor: not-allowed;
+}
+#food-select {
+    inline-size: 300px !important;   /* ← 今の元サイズ */
+    max-inline-size: 300px !important;
+    min-inline-size: 300px !important;
+
+    width: 300px !important;         /* 念のため */
+    box-sizing: border-box;
 }
 </style>
 <script>

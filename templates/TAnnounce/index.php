@@ -5,23 +5,92 @@
  */
 ?>
 <div class="tAnnounce index content">
-<div class="titlebox" style="display: flex; gap: 10px; 
-    align-items: center; margin-bottom:10px;">
+
     <h3 class="title" style="margin: 0;">お知らせ一覧</h3>
-    <div class="filterbox" style="text-align:right; margin-left:auto;">
-        <?= $this->Form->create(null, ['type' => 'post', 'id' => 'announce-filter-form']) ?>
-            <?= $this->Form->control('announce_div', [
-                'type' => 'select',
-                'options' => $announceDivList,
-                'label' => false,
-                'empty' => 'すべて',
-                'value' => $selectedDiv,
-                'onchange' => 'document.getElementById("announce-filter-form").submit();'
+
+    <div class="search-box-wrapper">
+    <?= $this->Form->create(null, [
+        'type' => 'get',
+        'url'  => ['action' => 'index']
+    ]) ?>
+
+    <?php
+    // ★ これがないとラベルは絶対に横にならない
+    $this->Form->setTemplates([
+        'inputContainer' => '{{content}}'
+    ]);
+    ?>
+
+    <div class="announce-search-grid">
+
+        <!-- 1行目：掲載日付 + タイトル検索 -->
+        <div class="lbl">掲載日付</div>
+        <div class="date-range">
+            <?= $this->Form->control('start_from', ['type'=>'date','label'=>false]) ?>
+            <span class="tilde">～</span>
+            <?= $this->Form->control('start_to', ['type'=>'date','label'=>false]) ?>
+        </div>
+        <div class="field-right">
+            <label class="sr-label">タイトル検索</label>
+            <?= $this->Form->control('title', [
+                'type' => 'text',
+                'label' => false
             ]) ?>
-        <?= $this->Form->end() ?>
+        </div>
+
+        <!-- 2行目：掲載データ + 区分 -->
+        <div class="lbl">掲載データ</div>
+        <div class="field">
+            <label class="checkline">
+                <?= $this->Form->checkbox('include_end', ['value'=>1]) ?>
+                掲載終了を含める
+            </label>
+        </div>
+        <div class="field-right">
+            <label class="sr-label">区分</label>
+            <?= $this->Form->control('announce_div', [
+                'type'    => 'select',
+                'options' => $announceDivList ?? [],
+                'empty'   => 'すべて',
+                'label'   => false,
+                'value'   => $this->request->getQuery('announce_div')
+            ]) ?>
+        </div>
+
+        <!-- 3行目：施設グループ -->
+        <div class="lbl">施設グループ</div>
+        <div class="field">
+            <?= $this->Form->control('facility_group', [
+                'type'  => 'text',
+                'label' => false,
+                'value' => $this->request->getQuery('facility_group')
+            ]) ?>
+        </div>
+        <div></div>
+
+        <!-- 4行目：発注サービス + 検索 -->
+        <div class="lbl">発注サービス</div>
+        <div class="field">
+            <?= $this->Form->control('use_service_id', [
+                'type'    => 'select',
+                'options' => $MServiceList,
+                'empty'   => 'すべて',
+                'label'   => false,
+                'value'   => $this->request->getQuery('use_service_id')
+            ]) ?>
+        </div>
+        <div class="search-field search-btn-wrap">
+            <?= $this->Form->submit('検索', ['class' => 'search-btn']) ?>
+        </div>
+
     </div>
+
+    <?= $this->Form->end() ?>
+    </div>
+
+
+
     <p class="countstatus" style="text-align:right;">件数 <?= $totalCount ?> 件</p>
-</div>
 
 <?= $this->Form->create(null, ['type' => 'post']) ?>
 <div class="scrollbox">
@@ -57,7 +126,14 @@
             ?>
                 <tr>
                     <td><?= $this->Form->checkbox("select[{$announce->announce_id}]", ['class' => 'toggle-color']) ?></td>
-                    <td><?= h($announce->announce_start_date->format('Y-m-d')) ?></td>
+                    <td>
+                        <?= $this->Html->link(
+                            h($announce->announce_start_date->format('Y-m-d')),
+                            ['action' => 'edit', $announce->announce_id],
+                            ['class' => 'link-edit']
+                        ) ?>
+                    </td>
+
                     <td><?= h($announceDivList[$announce->announce_div] ?? '') ?></td>
                     <td>
                         <!-- 開くトリガー -->
@@ -88,8 +164,8 @@
     
     <!-- 🔽 操作ボタン -->
     <div>
-    <?= $this->Form->button('追加', ['name' => 'action', 'value' => 'add']) ?>
-    <?= $this->Form->button('更新', ['name' => 'action', 'value' => 'edit']) ?>
+    <?= $this->Form->button('新規', ['type' => 'submit','name' => 'action', 'value' => 'add']) ?>
+    <!-- <?= $this->Form->button('更新', ['name' => 'action', 'value' => 'edit']) ?> -->
     <?= $this->Form->button('削除', [
     'name' => 'action',
     'value' => 'delete',
@@ -157,6 +233,103 @@
     font-size: 0.9rem;
     cursor: pointer;
     }
+.search-box-wrapper{
+    width:100%;
+    padding:2rem;
+    margin-bottom:1.5rem;
+    box-sizing:border-box;
+    border:1.5px solid #ccc;
+    border-radius:0.4rem;
+    background:#fff;
+}
+
+.announce-search-grid{
+    display:grid;
+    grid-template-columns:110px 360px 1fr;
+
+    column-gap:10px;
+    align-items:center;
+}
+
+.lbl,
+.sr-label{
+    white-space:nowrap;
+    color:#555;
+    font-size:1.5rem;
+    font-weight:400;
+    text-align:right;
+    justify-self:end;
+    align-self:center;
+    transform:translateY(-3px);
+}
+
+.date-range{
+    display:flex;
+    align-items:center;
+    gap:10px;
+}
+
+.date-range input{
+    width:160px;
+    height:3rem;
+    font-size:1.5rem;
+}
+
+.tilde{
+    white-space:nowrap;
+    font-size:1.5rem;
+}
+
+.field-right{
+    display:grid;
+    grid-template-columns:100px 1fr;
+    align-items:center;
+    column-gap:10px;
+}
+
+.field-right input,
+.field-right select{
+    width:100%;
+    height:3rem;
+    font-size:1.5rem;
+}
+
+.checkline{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    white-space:nowrap;
+    font-size:1.5rem;
+    font-weight:400;
+    color:#555;
+}
+
+.checkline input{
+    margin:0;
+}
+
+.btn-cell{
+    display:flex;
+    justify-content:flex-end;
+    align-items:center;
+}
+
+/* ▼ ここが追加：下2つを掲載日付と同サイズにする */
+.announce-search-grid .field input[type="text"],
+.announce-search-grid .field select{
+    width:160px;
+    height:3rem;
+    font-size:1.5rem;
+}
+.link-edit {
+    color: #0000ee;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.link-edit:hover {
+    color: #551a8b;
+}
 
 </style>
 

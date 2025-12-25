@@ -295,7 +295,7 @@ use Cake\Utility\Text;
         </div>
         </div>
         <div class="TAnnounceEd5">
-            <?= $this->Form->button($mode === 'edit' ? '更新' : '登録', ['id' => 'ANNOUNCEreg', 'class' => 'akabtn-like']) ?>
+            <?= $this->Form->button($mode === 'edit' ? '編集' : '登録', ['id' => 'ANNOUNCEreg', 'class' => 'akabtn-like']) ?>
             <a href="<?= $this->Url->build(['action' => 'index']) ?>"
              class="aobtn-like" onclick="return confirm('遷移すると入力内容が破棄されます。よろしいですか？')">戻る</a>
         

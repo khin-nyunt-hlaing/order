@@ -48,6 +48,11 @@ class TAnnounceUserTable extends AppTable
             'foreignKey' => 'announce_id',
         ]);
 
+        $this->belongsTo('MUser', [
+            'foreignKey' => 'user_id',
+            'bindingKey' => 'user_id',
+        ]);
+
 
     }
     public function beforeSave(EventInterface $event, EntityInterface $entity, \ArrayObject $options): void
