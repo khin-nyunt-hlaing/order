@@ -23,13 +23,15 @@ class MmenusController extends AppController
      */
 
 
+
+
 public function index()
 {
     // ===== ログインユーザー =====
     $identity = $this->request->getAttribute('identity');
     $useServiceId = (string)($identity?->get('use_service_id') ?? '');
 
-    // ===== メニュー取得（権限OKのみ）=====
+    // ===== メニュー取得 =====
     $menus = $this->fetchTable('MMenu')
         ->find()
         ->innerJoin(
@@ -44,20 +46,45 @@ public function index()
         ->order(['MMenu.disp_no' => 'ASC'])
         ->all();
 
-    // ===== 3階層に整形 =====
     $menuTree = [];
     foreach ($menus as $m) {
         $menuTree[$m->parent_menu_name][$m->sub_menu_name][] = $m;
     }
 
-    // ===== お知らせ =====
-    $announces = $this->fetchTable('TAnnounce')
-        ->find()
+    // ==================================================
+    // ✅ 区分マスタ取得（お知らせマスタより）
+    // ==================================================
+    $announceDivList = $this->fetchTable('MAnnounceDiv')
+        ->find('list', [
+            'keyField'   => 'announce_div',
+            'valueField' => 'announce_div_name'
+        ])
         ->where(['del_flg' => 0])
+        ->order(['announce_div' => 'ASC'])
+        ->toArray();
+
+    // ==================================================
+    // ✅ 区分（抽出条件）取得
+    // ==================================================
+    $selectedDiv = $this->request->getQuery('announce_div');
+
+    // ==================================================
+    // ✅ お知らせ一覧（抽出条件反映）
+    // ==================================================
+    $announceQuery = $this->fetchTable('TAnnounce')
+        ->find()
+        ->where(['del_flg' => 0]);
+
+    // 区分指定あり（空＝すべて は除外）
+    if (!empty($selectedDiv)) {
+        $announceQuery->where(['announce_div' => $selectedDiv]);
+    }
+
+    $announces = $announceQuery
         ->order(['announce_start_date' => 'DESC'])
         ->all();
 
-    // ===== 添付ファイル有無 =====
+    // ===== 添付ファイル有無判定 =====
     foreach ($announces as $a) {
         $a->has_file = false;
         for ($i = 1; $i <= 5; $i++) {
@@ -69,73 +96,49 @@ public function index()
     }
 
     // ==================================================
-    // ===== 次回締切日・該当献立週
-    // ===== ルール：
-    // =====   献立週(月) − 2週間 → 祝日なら前営業日
+    // ✅ 次回締切日・該当献立週（DB正）
     // ==================================================
     $conn = ConnectionManager::get('default');
 
-    // 次回の献立週を取得（開始日が未来のもの）
     $term = $conn->execute(
         "
         SELECT TOP 1
             start_date,
-            end_date
+            end_date,
+            add_deadline_date
         FROM dbo.M_TERM
-        WHERE start_date >= CAST(GETDATE() AS date)
-        ORDER BY start_date ASC
+        WHERE add_deadline_date >= CAST(GETDATE() AS date)
+          AND del_flg = 0
+        ORDER BY add_deadline_date ASC
         "
     )->fetch('assoc');
 
-    // 初期値
     $nextDeadline = '-';
     $menuWeek     = '-';
 
     if ($term) {
-        $startDate = new \DateTimeImmutable($term['start_date']);
-
-        // 仮締切日：献立週(月) − 2週間
-        $deadline = $startDate->modify('-14 days');
-
-        // 祝日・休日なら前営業日に補正
-        while (true) {
-            $row = $conn->execute(
-                "
-                SELECT holiday_flg
-                FROM dbo.M_CALENDAR
-                WHERE calendar_date = :d
-                ",
-                ['d' => $deadline->format('Y-m-d')]
-            )->fetch('assoc');
-
-            // holiday_flg = 1 → 休日
-            if ($row && (int)$row['holiday_flg'] === 1) {
-                $deadline = $deadline->modify('-1 day');
-                continue;
-            }
-
-            break; // 営業日
+        if (!empty($term['add_deadline_date'])) {
+            $nextDeadline = (new \DateTimeImmutable($term['add_deadline_date']))
+                ->format('Y/m/d');
         }
 
-        // View用
-        $nextDeadline = $deadline->format('Y/m/d');
         $menuWeek =
             (new \DateTimeImmutable($term['start_date']))->format('Y/m/d')
             . ' ～ ' .
             (new \DateTimeImmutable($term['end_date']))->format('Y/m/d');
     }
 
-    // ===== Viewへ =====
+    // ===== View =====
     $this->set([
-        'menuTree'     => $menuTree,
-        'announces'    => $announces,
-        'count'        => $announces->count(),
-        'nextDeadline' => $nextDeadline,
-        'menuWeek'     => $menuWeek,
+        'menuTree'        => $menuTree,
+        'announces'       => $announces,
+        'count'           => $announces->count(),
+        'announceDivList' => $announceDivList, // ← セレクト用
+        'selectedDiv'     => $selectedDiv,     // ← 選択保持
+        'nextDeadline'    => $nextDeadline,
+        'menuWeek'        => $menuWeek,
     ]);
 }
-
-
 
 
 

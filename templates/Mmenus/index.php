@@ -29,32 +29,69 @@
   </div>
 
   <!-- ===== お知らせ ===== -->
-  <div class="notice-header">
+  <!-- ===== お知らせ ===== -->
+<div class="notice-header">
     <span class="notice-title">お知らせ</span>
     <span class="notice-count">件数 <?= h($count) ?> 件</span>
-  </div>
+</div>
 
-  <div class="scrollbox">
+<?= $this->Form->create(null, ['type' => 'get']) ?>
+
+<div class="scrollbox">
     <table class="styled-table">
-      <thead>
-        <tr>
-          <th>日付</th><th>区分</th><th>お知らせ</th><th>添付</th>
-        </tr>
-      </thead>
-      <tbody>
-        <?php if ($count === 0): ?>
-          <tr><td colspan="4" style="text-align:center;">データがありません</td></tr>
-        <?php else: foreach ($announces as $a): ?>
-          <tr>
-            <td><?= h($a->announce_start_date) ?></td>
-            <td><?= h($a->announce_div) ?></td>
-            <td><?= h($a->announce_title) ?></td>
-            <td><?= !empty($a->has_file) ? 'あり' : '' ?></td>
-          </tr>
-        <?php endforeach; endif; ?>
-      </tbody>
+        <thead>
+            <tr>
+                <th style="width:20%;">日付</th>
+
+                <!-- 区分（抽出条件） -->
+                <th style="width:20%;">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="white-space:nowrap;">区分</span>
+                        <?= $this->Form->select('announce_div', $announceDivList, [
+                            'empty'   => 'すべて',
+                            'value'   => $selectedDiv ?? '',
+                            'id'      => 'announceDiv',
+                            'onchange'=> 'this.form.submit();',
+                            'style'   => '
+                                width:100%;
+                                height:26px;
+                                padding:2px 6px;
+                                font-size:12px;
+                                margin-bottom:0;
+                            '
+                        ]) ?>
+                    </div>
+                </th>
+
+                <th>お知らせ</th>
+                <th style="width:10%;">添付</th>
+            </tr>
+        </thead>
+
+        <tbody>
+            <?php if ($count === 0): ?>
+                <tr>
+                    <td colspan="4" style="text-align:center;">
+                        データがありません
+                    </td>
+                </tr>
+            <?php else: ?>
+                <?php foreach ($announces as $a): ?>
+                    <tr>
+                        <td><?= h($a->announce_start_date) ?></td>
+                        <td><?= h($announceDivList[$a->announce_div] ?? '') ?></td>
+                        <td><?= h($a->announce_title) ?></td>
+                        <td><?= !empty($a->has_file) ? 'あり' : '' ?></td>
+                    </tr>
+                <?php endforeach; ?>
+            <?php endif; ?>
+        </tbody>
     </table>
-  </div>
+</div>
+
+<?= $this->Form->end() ?>
+
+
 
 </div>
 
@@ -293,6 +330,7 @@ document.querySelectorAll('.parent-btn').forEach(btn => {
     });
   });
 });
+
 </script>
 
 
