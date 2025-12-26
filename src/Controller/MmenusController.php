@@ -32,27 +32,37 @@ public function index()
     $useServiceId = (string)($identity?->get('use_service_id') ?? '');
 
     // ===== メニュー取得 =====
-    $menus = $this->fetchTable('MMenu')
+    $menuQuery = $this->fetchTable('MMenu')
         ->find()
         ->innerJoin(
             ['Auth' => 'M_AUTH'],
             [
                 'Auth.menu_id = MMenu.menu_id',
                 'Auth.use_service_id' => $useServiceId,
-                'Auth.use_div' => 1,
             ]
         )
         ->where(['MMenu.del_flg' => 0])
-        ->order(['MMenu.disp_no' => 'ASC'])
-        ->all();
+        ->order(['MMenu.disp_no' => 'ASC']);
 
+    // ★ サービス別 use_div 制御
+    if ($useServiceId === '5') {
+        // 閲覧サービス：use_div = 1,2 を許可
+        $menuQuery->where(['Auth.use_div IN' => [1, 2]]);
+    } else {
+        // 通常サービス：use_div = 1 のみ
+        $menuQuery->where(['Auth.use_div' => 1]);
+    }
+
+    $menus = $menuQuery->all();
+
+    // ===== 3階層メニュー構築 =====
     $menuTree = [];
     foreach ($menus as $m) {
         $menuTree[$m->parent_menu_name][$m->sub_menu_name][] = $m;
     }
 
     // ==================================================
-    // ✅ 区分マスタ取得（お知らせマスタより）
+    // 区分マスタ取得
     // ==================================================
     $announceDivList = $this->fetchTable('MAnnounceDiv')
         ->find('list', [
@@ -64,18 +74,17 @@ public function index()
         ->toArray();
 
     // ==================================================
-    // ✅ 区分（抽出条件）取得
+    // 区分（抽出条件）
     // ==================================================
     $selectedDiv = $this->request->getQuery('announce_div');
 
     // ==================================================
-    // ✅ お知らせ一覧（抽出条件反映）
+    // お知らせ一覧
     // ==================================================
     $announceQuery = $this->fetchTable('TAnnounce')
         ->find()
         ->where(['del_flg' => 0]);
 
-    // 区分指定あり（空＝すべて は除外）
     if (!empty($selectedDiv)) {
         $announceQuery->where(['announce_div' => $selectedDiv]);
     }
@@ -84,7 +93,7 @@ public function index()
         ->order(['announce_start_date' => 'DESC'])
         ->all();
 
-    // ===== 添付ファイル有無判定 =====
+    // ===== 添付ファイル有無 =====
     foreach ($announces as $a) {
         $a->has_file = false;
         for ($i = 1; $i <= 5; $i++) {
@@ -96,9 +105,9 @@ public function index()
     }
 
     // ==================================================
-    // ✅ 次回締切日・該当献立週（DB正）
+    // 次回締切日・献立週
     // ==================================================
-    $conn = ConnectionManager::get('default');
+    $conn = \Cake\Datasource\ConnectionManager::get('default');
 
     $term = $conn->execute(
         "
@@ -129,16 +138,17 @@ public function index()
     }
 
     // ===== View =====
-    $this->set([
-        'menuTree'        => $menuTree,
-        'announces'       => $announces,
-        'count'           => $announces->count(),
-        'announceDivList' => $announceDivList, // ← セレクト用
-        'selectedDiv'     => $selectedDiv,     // ← 選択保持
-        'nextDeadline'    => $nextDeadline,
-        'menuWeek'        => $menuWeek,
-    ]);
+    $this->set(compact(
+        'menuTree',
+        'announces',
+        'announceDivList',
+        'selectedDiv',
+        'nextDeadline',
+        'menuWeek'
+    ));
+    $this->set('count', $announces->count());
 }
+
 
 
 
