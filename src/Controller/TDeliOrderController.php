@@ -48,12 +48,14 @@ public function index()
 
         // --- ② 抽出条件 ---
             $queryParams = $this->request->is('post') ? $this->request->getData() : $this->request->getQueryParams();
+            $queryParams['facility_name']     = trim((string)($queryParams['facility_name'] ?? ''));
+            $queryParams['include_completed'] = !empty($queryParams['include_completed']) ? '1' : '0';
 
         // --- ③ 画面表示用データを構築（一覧 + ラベル + 行/ページ活性）---
             $dispUserIds = (array)($this->getRequest()->getAttribute('disp_user_ids') ?? []);
             [$tDeliOrder, $users, $pageFlags] = $this->composeIndexViewData(
                 $queryParams,
-                (string)($userId ?? ''),
+                (string)($queryParams['user_id'] ?? ''), // ★ここが重要
                 (int)$level,
                 $dispUserIds
             );
@@ -170,6 +172,8 @@ public function index()
 
                     'user_id'             => $data['user_id'] ?? null,
                     'confirm_status'        => $data['confirm_status']   ?? null,
+                    'facility_name'         => $data['facility_name'] ?? null,
+                    'include_completed'     => !empty($data['include_completed']) ? '1' : null,
                 ];
                 $carry = array_filter($carry, fn($v) => $v !== '' && $v !== null);
                 Log::debug('[TFood search ▶ carry] ' . json_encode($carry, JSON_UNESCAPED_UNICODE));
@@ -218,15 +222,41 @@ public function index()
                     }
 
                     // ★ edit決定 ＆ deli_order_id 付きなら PK で edit へ（セッション経由・クエリ無し）
-                    if (($res['action'] ?? null) === 'edit' && !empty($res['deli_order_id'])) {
-                        $sess = $this->request->getSession();
-                        $sess->write('ReadOnly',            false); // 通常編集
-                        $sess->write('SelectedTermId',      (int)$res['term_id']);
-                        $sess->write('SelectedOwnerId',     (string)($res['user_id'] ?? ''));
-                        $sess->write('SelectedDeliOrderId', (int)$res['deli_order_id']);
-                        Log::debug('【正常操作なら】配列内容: ' . print_r($sess, true));
-                        return $this->redirect(['action' => 'edit']);
-                    }
+                   if (!empty($res['error'])) {
+                        // Lv5 でも「閲覧として編集画面へ」は許可する
+                        if (($res['error'] === 'blocked_service5') && (($res['action'] ?? null) === 'edit')) {
+                                $sess = $this->request->getSession();
+                                $sess->write('ReadOnly', true);
+                                $sess->write('SelectedTermId',  (int)$res['term_id']);
+                                $sess->write('SelectedOwnerId', (string)($res['user_id'] ?? ''));
+                                if (!empty($res['deli_order_id'])) {
+                                    $sess->write('SelectedDeliOrderId', (int)$res['deli_order_id']);
+                                }
+                                return $this->redirect(['action' => 'edit']);
+                            }
+
+                            // ❌ 固定文字列を入れていたのを修正
+                            $sess = $this->request->getSession();
+                            $sess->write('ReadOnly', false);
+                            $sess->write('SelectedTermId',  (int)($res['term_id'] ?? 0));
+                            $sess->write('SelectedOwnerId', (string)($res['user_id'] ?? ''));
+                            if (!empty($res['deli_order_id'])) {
+                                $sess->write('SelectedDeliOrderId', (int)$res['deli_order_id']);
+                            }
+
+                            return $this->redirect(['action' => 'edit']);
+                        }
+
+                    // ★ edit決定 ＆ deli_order_id 付きなら PK で edit へ（セッション経由・クエリ無し）
+                    // if (($res['action'] ?? null) === 'edit' && !empty($res['deli_order_id'])) {
+                    //     $sess = $this->request->getSession();
+                    //     $sess->write('ReadOnly',            false); // 通常編集
+                    //     $sess->write('SelectedTermId',      (int)$res['term_id']);
+                    //     $sess->write('SelectedOwnerId',     (string)($res['user_id'] ?? ''));
+                    //     $sess->write('SelectedDeliOrderId', (int)$res['deli_order_id']);
+                    //     Log::debug('【正常操作なら】配列内容: ' . print_r($sess, true));
+                    //     return $this->redirect(['action' => 'edit']);
+                    // }
 
                     //日付の活性非活性処理
                             $TermCol = $this->fetchTable('MTerm')->get((int)$res['term_id']);
@@ -359,24 +389,51 @@ public function index()
                 }
 
                     if (!isset($level) || (int)$level !== 1) {
-                        $termIds = array_values(array_unique(array_map(fn($r) => $r['term_id'], $rows)));
 
                         $termTable = $this->fetchTable('MTerm');
                         $terms = $termTable->find()
-                            ->select(['term_id', 'upd_deadline_date'])
+                            ->select([
+                                'term_id',
+                                'entry_start_date',
+                                'upd_deadline_monday',
+                                'upd_deadline_tue',
+                                'upd_deadline_wed',
+                                'upd_deadline_thu',
+                                'upd_deadline_fri',
+                                'upd_deadline_sat',
+                                'upd_deadline_sun',
+                            ])
                             ->where(['term_id IN' => $termIds])
                             ->disableHydration()
                             ->all()
                             ->toList();
 
-                        // いま（JST）
-                        $nowJst = $this->getSqlNowJst(); // 既存ヘルパがある前提。無ければ new \Cake\I18n\FrozenTime('now', 'Asia/Tokyo')
+                        $nowJst = $this->getSqlNowJst();
 
-                        // どれか1つでも締切超過なら中断
                         foreach ($terms as $t) {
-                            $cutoff = $this->at1200Jst($t['upd_deadline_date']); // 既存ヘルパ：その日の 12:00 JST を返す想定
+                            $targetDate = new FrozenDate($t['entry_start_date']);
+
+                            $map = [
+                                0 => 'upd_deadline_sun',
+                                1 => 'upd_deadline_monday',
+                                2 => 'upd_deadline_tue',
+                                3 => 'upd_deadline_wed',
+                                4 => 'upd_deadline_thu',
+                                5 => 'upd_deadline_fri',
+                                6 => 'upd_deadline_sat',
+                            ];
+
+                            $w = (int)$targetDate->format('w');
+                            $beforeDays = (int)($t[$map[$w]] ?? 0);
+
+                            $deadline = $targetDate->subDays($beforeDays);
+                            $cutoff   = $this->at1200Jst($deadline);
+
                             if ($cutoff && $nowJst >= $cutoff) {
-                                $this->Flash->error('受付は本日12:00で終了しました。締切日を超えている為、登録できません。管理者にご確認ください。', ['key' => 'modal']);
+                                $this->Flash->error(
+                                    '受付は本日12:00で終了しました。締切日を超えている為、登録できません。',
+                                    ['key' => 'modal']
+                                );
                                 return $this->redirect($this->referer());
                             }
                         }
@@ -390,7 +447,24 @@ public function index()
                 $termsTable = $this->fetchTable('MTerm');
                 foreach ($selectedIds as $termId) {
                     $term = $termsTable->get($termId);      // ← $this-> を外す
-                    $col0 = $this->asDate0Jst($term->upd_deadline_date);
+                    $targetDate = new FrozenDate($term->entry_start_date);
+
+                    $w = (int)$targetDate->format('w');
+                    $map = [
+                        0 => 'upd_deadline_sun',
+                        1 => 'upd_deadline_monday',
+                        2 => 'upd_deadline_tue',
+                        3 => 'upd_deadline_wed',
+                        4 => 'upd_deadline_thu',
+                        5 => 'upd_deadline_fri',
+                        6 => 'upd_deadline_sat',
+                    ];
+
+                    $beforeDays = (int)($term->{$map[$w]} ?? 0);
+                    $deadline   = $targetDate->subDays($beforeDays);
+
+                    $col0 = $this->asDate0Jst($deadline);
+
                     Log::debug('期間' . $col0->format('Y-m-d H:i:s'));
                     
                     $isToday = ($col0 == $today0);
@@ -1111,6 +1185,22 @@ public function edit()
 {
     Log::debug('edit開始');
     $this->request->allowMethod(['get', 'post', 'put', 'patch']);
+        $session = $this->request->getSession();
+
+        $qTermId = (int)($this->request->getQuery('term_id') ?? 0);
+        $qUserId = (string)($this->request->getQuery('user_id') ?? '');
+        $qDeliId = (int)($this->request->getQuery('deli_order_id') ?? 0);
+
+        if ($qTermId > 0 && $qUserId !== '') {
+            $session->write('SelectedTermId', $qTermId);
+            $session->write('SelectedOwnerId', $qUserId);
+            Log::debug("[GET→SESSION] SelectedTermId={$qTermId}, SelectedOwnerId={$qUserId}");
+        }
+
+        if ($qDeliId > 0) {
+            $session->write('SelectedDeliOrderId', $qDeliId);
+            Log::debug("[GET→SESSION] SelectedDeliOrderId={$qDeliId}");
+        }
 
         // ❶ 最初に一度だけ決定
         $level = $this->currentLevel();
@@ -1210,7 +1300,27 @@ public function edit()
             $nowJst          = $this->getSqlNowJst(); // JST 現在時刻（同一リクエスト内キャッシュ）
             $entryStart1200  = $this->addStart1200Jst($mTerm->entry_start_date ?? null, $mTerm->add_deadline_date ?? null); // ②が無ければ②-7日@12:00
             $addDeadline1200 = $this->at1200Jst($mTerm->add_deadline_date ?? null);  // ② 10/13 @12:00
-            $updDeadline1200 = $this->at1200Jst($mTerm->upd_deadline_date ?? null);  // ③ 10/20 @12:00
+            $targetDate = $mTerm->entry_start_date; // 基準日（配食日・献立日）
+
+            $updDeadline1200 = null;
+            if ($targetDate !== null) {
+                $weekdayMap = [
+                    0 => 'upd_deadline_sun',
+                    1 => 'upd_deadline_monday',
+                    2 => 'upd_deadline_tue',
+                    3 => 'upd_deadline_wed',
+                    4 => 'upd_deadline_thu',
+                    5 => 'upd_deadline_fri',
+                    6 => 'upd_deadline_sat',
+                ];
+
+                $w = (int)$targetDate->format('w');
+                $beforeDays = (int)($mTerm->{$weekdayMap[$w]} ?? 0);
+
+                // 配食日 − 指定日数 → その日の12:00
+                $deadlineDate   = (clone $targetDate)->subDays($beforeDays);
+                $updDeadline1200 = $this->at1200Jst($deadlineDate);
+            }
             // 終了境界は ③優先、③が無ければ ②。両方無ければ判定不可→空文字
             $endBoundary     = $updDeadline1200 ?? $addDeadline1200;
 
@@ -1345,36 +1455,47 @@ public function edit()
 
         //更新デッドラインと比較処理
             $TermRecord = $MTerm
-                ->find()
-                ->select(['upd_deadline_date'])
-                ->where(['term_id' => $termId])
-                ->first();
+            ->find()
+            ->select([
+                'term_id',
+                'entry_start_date',
+                'upd_deadline_monday',
+                'upd_deadline_tue',
+                'upd_deadline_wed',
+                'upd_deadline_thu',
+                'upd_deadline_fri',
+                'upd_deadline_sat',
+                'upd_deadline_sun',
+            ])
+            ->where(['term_id' => $termId])
+            ->first();
 
-            // if ($TermRecord) {
-                //     Log::debug(sprintf(
-                //         '[MTerm ▶ upd_deadline_date] term_id=%d / upd_deadline_date=%s',
-                //         $termId,
-                //         (string)$TermRecord->upd_deadline_date
-                //     ));
-                // } else {
-                //     Log::debug(sprintf('[MTerm ▶ upd_deadline_date] term_id=%d / 該当なし', $termId));
-            // }
 
-            // ▼ upd_deadline_date に 12時を加える
-            if ($TermRecord && $TermRecord->upd_deadline_date) {
+            if ($TermRecord && $TermRecord->entry_start_date) {
 
-                // ▼ upd_deadline_date に 12時を足して現在時刻と比較
-            if ($TermRecord && $TermRecord->upd_deadline_date) {
+                // ▼ 配食日（基準日）
+                $targetDate = new FrozenDate($TermRecord->entry_start_date);
 
-                // upd_deadline_date（日付）＋12時
-                $deadline = new FrozenTime($TermRecord->upd_deadline_date->format('Y-m-d') . ' 12:00:00');
-                $now = FrozenTime::now();
+                // ▼ 曜日 → カラム対応
+                $weekdayMap = [
+                    0 => 'upd_deadline_sun',
+                    1 => 'upd_deadline_monday',
+                    2 => 'upd_deadline_tue',
+                    3 => 'upd_deadline_wed',
+                    4 => 'upd_deadline_thu',
+                    5 => 'upd_deadline_fri',
+                    6 => 'upd_deadline_sat',
+                ];
 
-                // Log::debug(sprintf(
-                    //     '[期限比較] 現在=%s / 締切=%s',
-                    //     $now->format('Y-m-d H:i:s'),
-                    //     $deadline->format('Y-m-d H:i:s')
-                // ));
+                $w = (int)$targetDate->format('w');
+                $beforeDays = (int)($TermRecord->{$weekdayMap[$w]} ?? 0);
+
+                // ▼ 締切日 = 配食日 − 指定日数
+                $deadlineDate = (clone $targetDate)->subDays($beforeDays);
+
+                // ▼ 12:00(JST) に変換
+                $deadline = $this->at1200Jst($deadlineDate);
+                $now      = $this->getSqlNowJst();
 
                 if ($now < $deadline) {
                     // 期限前
@@ -1397,32 +1518,68 @@ public function edit()
 
                 // リダイレクトしない。テンプレートを直接描画
                  return $this->render('add_edit');
-                }
+                
             }
         }
 
-            if ($isL2) { // L2/4のみ制限
+            if ($isL2) { // L2 / L4 のみ制限
 
-                // upd_deadline_date の当日 12:00 を閾値にする
-                $updCutoff = ($mTerm->upd_deadline_date instanceof \DateTimeInterface)
-                    ? \DateTimeImmutable::createFromInterface($mTerm->upd_deadline_date)
-                    : new \DateTimeImmutable((string)$mTerm->upd_deadline_date, new \DateTimeZone('Asia/Tokyo'));
-                $updCutoff = $updCutoff->setTime(12, 0, 0);
+                // JST 現在時刻
+                $nowJst = $this->getSqlNowJst();
 
-                Log::debug(sprintf('[EDIT CUT] now=%s cutoff=%s',
-                    $nowJst->format('Y-m-d H:i:s'), $updCutoff->format('Y-m-d H:i:s')));
+                // 基準日（配食日 / 献立日）
+                if (!$mTerm->entry_start_date instanceof \DateTimeInterface) {
+                    // 基準日が無ければ判定不能 → 制限しない（安全側）
+                    return;
+                }
 
-                if ($nowJst >= $updCutoff) {
+                $targetDate = new \Cake\I18n\FrozenDate($mTerm->entry_start_date);
+
+                // 曜日 → カラム対応
+                $weekdayMap = [
+                    0 => 'upd_deadline_sun',
+                    1 => 'upd_deadline_monday',
+                    2 => 'upd_deadline_tue',
+                    3 => 'upd_deadline_wed',
+                    4 => 'upd_deadline_thu',
+                    5 => 'upd_deadline_fri',
+                    6 => 'upd_deadline_sat',
+                ];
+
+                $w = (int)$targetDate->format('w');
+                $beforeDays = (int)($mTerm->{$weekdayMap[$w]} ?? 0);
+
+                // 締切日 = 配食日 − 指定日数
+                $deadlineDate = (clone $targetDate)->subDays($beforeDays);
+
+                // 12:00(JST) を締切とする
+                $cutoff = $this->at1200Jst($deadlineDate);
+
+                Log::debug(sprintf(
+                    '[EDIT CUT] now=%s cutoff=%s',
+                    $nowJst->format('Y-m-d H:i:s'),
+                    $cutoff?->format('Y-m-d H:i:s')
+                ));
+
+                if ($cutoff && $nowJst >= $cutoff) {
+
+                    $msg = '受付は本日12:00で終了しました。締切日を超えている為、登録できません。管理者にご確認ください。';
+
                     if ($this->request->is('ajax')) {
                         $this->viewBuilder()->setClassName('Json');
-                        $this->set(['ok' => false, 'errors' => ['global' => '受付は本日12:00で終了しました。締切日を超えている為、登録できません。管理者にご確認ください。']]);
+                        $this->set([
+                            'ok'     => false,
+                            'errors' => ['global' => $msg]
+                        ]);
                         $this->viewBuilder()->setOption('serialize', ['ok','errors']);
                         return;
                     }
-                    $this->Flash->error('受付は本日12:00で終了しました。締切日を超えている為、登録できません。管理者にご確認ください。');
+
+                    $this->Flash->error($msg);
                     return $this->redirect(['action' => 'index']);
                 }
             }
+
 
 
             // --- PK再特定＆認可（そのまま） -------------------------
@@ -1962,76 +2119,92 @@ public function export()
     //一覧構築
         private function composeIndexViewData(array $queryParams, string $viewerId, int $level, array $dispUserIds): array
         {
-            // 1) レベル別 A×B を一括取得（A=MTerm基点）
+
+            // 1) レベル別データ取得
             [$terms, $byTerm] = $this->fetchForIndex($queryParams, $viewerId, $level, $dispUserIds);
 
-            // 配列の中身をログに出す
-            Log::debug('📌 配列チェック: ' . print_r($queryParams, true));
-
-            // 2) ユーザー名Map（表示用）※ byTerm から収集
+            // 2) ユーザー名Map
             $needUserIds = [];
             foreach ($byTerm as $list) {
                 foreach ($list as $r) {
-                    $uid = (string)$r->user_id;
-                    if ($uid !== '') $needUserIds[] = $uid;
+                    if (!empty($r->user_id)) {
+                        $needUserIds[] = (string)$r->user_id;
+                    }
                 }
             }
-            if ($level === 2 && $viewerId !== '') $needUserIds[] = $viewerId;
+            if ($level === 2 && $viewerId !== '') {
+                $needUserIds[] = $viewerId;
+            }
             $needUserIds = array_values(array_unique($needUserIds));
             $userNameMap = $this->loadUserNameMap($needUserIds);
 
-            // 5) 行生成（仕様反映）
-            $rows = $this->makeRows($terms, $byTerm, $level, $viewerId, $userNameMap, $dispUserIds);
+            // 3) 行生成
+            $rows = $this->makeRows(
+                $terms,
+                $byTerm,
+                $level,
+                $viewerId,
+                $userNameMap,
+                $dispUserIds
+            );
 
-            // ★ 初期ソート順：start_date DESC → end_date DESC → order_status → confirm_status → deli_order_id
+            // 4) 施設名称（部分一致）
+            if (!empty($queryParams['facility_name'])) {
+                $keyword = mb_strtolower(trim((string)$queryParams['facility_name']));
+                $rows = array_values(array_filter($rows, function ($row) use ($keyword) {
+                    $name = mb_strtolower((string)($row->display_user_name ?? ''));
+                    return mb_strpos($name, $keyword) !== false;
+                }));
+            }
+
+            // 5) ソート
             usort($rows, function ($a, $b) {
-                // 開始日（新しい日付が先）
-                $cmp = strcmp((string)$b->start_date, (string)$a->start_date);
-                if ($cmp !== 0) return $cmp;
+                $csA = is_null($a->order_status) ? 2 : (int)$a->order_status;
+    $csB = is_null($b->order_status) ? 2 : (int)$b->order_status;
+    if ($csA !== $csB) {
+        return $csA <=> $csB;
+    }
 
-                // 終了日（新しい日付が先）
-                $cmp = strcmp((string)$b->end_date, (string)$a->end_date);
-                if ($cmp !== 0) return $cmp;
+    // ② 開始日（新しい日付が先）
+    $cmp = strcmp((string)$b->start_date, (string)$a->start_date);
+    if ($cmp !== 0) return $cmp;
 
-                // 発注状態（TDeli=0/1、Placeholder=null は最後に来るよう 2 扱い）
-                $osA = is_null($a->order_status) ? 2 : (int)$a->order_status;
-                $osB = is_null($b->order_status) ? 2 : (int)$b->order_status;
-                if ($osA !== $osB) return $osA <=> $osB;
+    // ③ 終了日（新しい日付が先）
+    $cmp = strcmp((string)$b->end_date, (string)$a->end_date);
+    if ($cmp !== 0) return $cmp;
 
-                // 確定状況
-                $isATDeli = (($a->source ?? '') === 'TDeli');
-                $isBTDeli = (($b->source ?? '') === 'TDeli');
-                $csA = $isATDeli ? ((int)($a->order_status ?? 0) === 1 ? 1 : 0) : -1;
-                $csB = $isBTDeli ? ((int)($b->order_status ?? 0) === 1 ? 1 : 0) : -1;
-                if ($csA !== $csB) return $csA <=> $csB;
+    // ④ 発注ID（nullは最後）
+    $idA = isset($a->deli_order_id) ? (int)$a->deli_order_id : PHP_INT_MAX;
+    $idB = isset($b->deli_order_id) ? (int)$b->deli_order_id : PHP_INT_MAX;
+    return $idA <=> $idB;
+});
 
-                // 発注ID（null は最後）
-                $idA = isset($a->deli_order_id) ? (int)$a->deli_order_id : PHP_INT_MAX;
-                $idB = isset($b->deli_order_id) ? (int)$b->deli_order_id : PHP_INT_MAX;
-                return $idA <=> $idB;
-            });
+            // 6) 受付完了フィルタ（★ここだけ）
+            if (empty($queryParams['include_completed']) || (string)$queryParams['include_completed'] === '0') {
+                $rows = array_values(array_filter($rows, function ($row) {
+                    return ($row->reception_status ?? '') !== '受付完';
+                }));
+            }
 
-            // 6) セレクト用ユーザー候補（サービスで絞る／サービス5はdisp_user_idsで制限）
+            // 7) セレクト用ユーザー
             $identity  = $this->getRequest()->getAttribute('identity');
             $serviceId = (int)($identity?->get('use_service_id') ?? 0);
 
             if ($level === 1) {
-                // 管理（サービス1）：サービス2・4の全ユーザーを候補に
                 $users = $this->loadUsersForSelectByServices([2, 4]);
-
             } elseif ($level === 0) {
-                // 閲覧(サービス5想定): 閲覧許可ID × サービス2/4のみ
                 $users = $this->buildUserSelectOptions($serviceId, $dispUserIds, [2, 4]);
-
             } else {
                 $users = [];
             }
 
-            // 7) ページ活性フラグ
+            // 8) ページフラグ
             $pageFlags = $this->computePageFlags($rows);
-            
+
             return [$rows, $users, $pageFlags];
         }
+
+
 
         private function fetchForIndex(array $queryParams, string $viewerId, int $level, array $dispUserIds): array
         {
@@ -2042,46 +2215,81 @@ public function export()
             $to    = $today->addWeeks(3);
 
             $qTerm = $MTerm->find()
-                ->select(['term_id','start_date','end_date','entry_start_date','add_deadline_date','upd_deadline_date'])
+                ->select(['term_id','start_date','end_date','entry_start_date','add_deadline_date','upd_deadline_sun',
+            'upd_deadline_monday',
+            'upd_deadline_tue',
+            'upd_deadline_wed',
+            'upd_deadline_thu',
+            'upd_deadline_fri',
+            'upd_deadline_sat',])
                 ->where(['del_flg' => '0'])
                 ->andWhere(function ($exp) use ($to) {
-                    return $exp->lte('start_date', $to); // start_date <= 今日+3週
+                    return $exp->lte('start_date', $to);
                 })
                 ->order(['start_date' => 'ASC']);
 
-            // 任意の期間フィルタ（存在時のみ）
             $this->applyTermDateFilters($qTerm, $queryParams);
 
-            $terms = $qTerm->all()->toList(); // array<MTerm>
+            $terms = $qTerm->all()->toList();
             if (empty($terms)) {
                 return [[], []];
             }
 
-            // --- B: TDeli（Aのterm_idに属する行だけ、レベル別に絞る）---
+            // --- B: TDeli ---
             $termIds = array_map(fn($t) => (int)$t->term_id, $terms);
 
             $TDeli = $this->fetchTable('TDeliOrder');
             $qDeli = $TDeli->find()
-                ->select(['deli_order_id','term_id','user_id','order_status','create_user','update_user','create_date','update_date'])
-                ->where(['del_flg' => '0', 'term_id IN' => $termIds]);
+                ->select([
+                    'deli_order_id',
+                    'term_id',
+                    'user_id',
+                    'order_status',
+                    'create_user',
+                    'update_user',
+                    'create_date',
+                    'update_date'
+                ])
+                ->where([
+                    'del_flg' => '0',
+                    'term_id IN' => $termIds
+                ]);
 
-            // レベル別ユーザー絞り込み
-            if ($level === 2) {
+            if (
+                array_key_exists('confirm_status', $queryParams)
+                && $queryParams['confirm_status'] !== ''
+                && $queryParams['confirm_status'] !== null
+            ) {
+                $qDeli->andWhere([
+                    'TDeliOrder.order_status' => (int)$queryParams['confirm_status']
+                ]);
+            }
+            
+            if (in_array($level, [2, 4], true)) {
                 if ($viewerId !== '') {
                     $qDeli->andWhere(['user_id' => $viewerId]);
                 } else {
-                    $qDeli->andWhere(['1 = 0']); // viewer 不明なら空
+                    $qDeli->andWhere(['1 = 0']);
                 }
+
+            } elseif ($level === 1) {
+                if (!empty($queryParams['user_id'])) {
+                    $qDeli->andWhere(['user_id' => $queryParams['user_id']]);
+                }
+
             } elseif ($level === 0) {
                 if (!empty($dispUserIds)) {
                     $qDeli->andWhere(['user_id IN' => $dispUserIds]);
                 } else {
-                    $qDeli->andWhere(['1 = 0']); // 許可IDなしなら空
+                    $qDeli->andWhere(['1 = 0']);
                 }
             }
-            $deliRows = $qDeli->all()->toList(); // array<TDeliOrder>
 
-            // term_id => TDeli[]
+            Log::debug('🔍 TDeli SQL: ' . $qDeli->sql());
+            Log::debug('🔍 TDeli params: ' . json_encode($qDeli->getValueBinder()->bindings()));
+
+            $deliRows = $qDeli->all()->toList();
+
             $byTerm = [];
             foreach ($deliRows as $r) {
                 $byTerm[(int)$r->term_id][] = $r;
@@ -2090,12 +2298,21 @@ public function export()
             return [$terms, $byTerm];
         }
 
-        private function makeRows(array $terms, array $byTerm, int $level, string $viewerId, array $userNameMap, array $dispUserIds): array
-        {
-            Log::debug("makeRows:アクション開始");
-            // ★SQL Server基準の“今日”(JST)に統一
-            $nowJst = $this->getSqlNowJst(); // 先に追加済みのヘルパー
-            $today  = \DateTimeImmutable::createFromFormat('Y-m-d', $nowJst->format('Y-m-d'), new \DateTimeZone('Asia/Tokyo'));
+
+        private function makeRows(
+            array $terms,
+            array $byTerm,
+            int $level,
+            string $viewerId,
+            array $userNameMap,
+            array $dispUserIds
+        ): array {
+
+            Log::debug('makeRows start');
+
+            // SQL Server基準 JST
+            $nowJst = $this->getSqlNowJst();
+            $today  = new \Cake\I18n\FrozenDate($nowJst->format('Y-m-d'));
 
             $rows = [];
 
@@ -2104,230 +2321,194 @@ public function export()
                 $start  = $t->start_date;
                 $end    = $t->end_date;
                 $dead   = $t->add_deadline_date;
-                
 
+                // 期間フェーズ
                 [$periodPhase, $periodLabel] = $this->computeReceptionPhase(
-                    $today, $t->entry_start_date, $t->add_deadline_date, $t->upd_deadline_date
+                    $today,
+                    $t->entry_start_date,
+                    $t->add_deadline_date,
+                    $t
                 );
-                // 既存行は期フェーズをそのまま使う
-                $existingPhaseCode  = $periodPhase;
-                $existingReception  = $periodLabel;
+
                 $existing = $byTerm[$termId] ?? [];
 
+                /*
+                |--------------------------------------------------------------------------
+                | L1 : 管理者
+                |--------------------------------------------------------------------------
+                */
                 if ($level === 1) {
-                    // 管理：既存TDeliを全展開＋プレースホルダ1行
+
                     foreach ($existing as $r) {
-                        $isConfirmed = ((int)$r->order_status === 1);
-                        // 管理は制限なしだが、フラグは一応付与しておく（viewのdisabledは効かない想定）
-                    [$can, $why] = $this->computeRowTouchFlags(
-                            $existingPhaseCode,
-                            false,                                 // isPlaceholder
-                            ((int)$r->order_status === 1),         // isConfirmed
+                        [$can, $why] = $this->computeRowTouchFlags(
+                            $periodPhase,
+                            false,
+                            ((int)$r->order_status === 1),
                             $level,
-                            $t->add_deadline_date,
-                            $t->upd_deadline_date,
-                            $t->entry_start_date
+                            $t
                         );
 
                         $rows[] = (object)[
-                            'term_id'            => $termId,
-                            'start_date'         => $start,
-                            'end_date'           => $end,
-                            'entry_start_date'   => $t->entry_start_date,
-                            'add_deadline_date'  => $dead,
-                            'user_id'            => (string)$r->user_id,
-                            'display_user_id'    => (string)$r->user_id,
-                            'display_user_name'  => $userNameMap[(string)$r->user_id] ?? (string)$r->user_id,
-                            'source'             => 'TDeli',
-                            'order_status'       => (int)$r->order_status,
-                            'order_status_label' => '登録済', // ★ここを固定表示に
-                            'reception_status' => $existingReception,
-                            'reception_phase'  => $existingPhaseCode,
-                            'confirm_status'     => ((int)$r->order_status === 1 ? '確定' : '未確定'),
-                            'create_date'        => $r->create_date,
-                            'update_date'        => $r->update_date,
+                            'term_id'           => $termId,
+                            'start_date'        => $start,
+                            'end_date'          => $end,
+                            'entry_start_date'  => $t->entry_start_date,
+                            'add_deadline_date' => $dead,
 
-                            'deli_order_id'      => (int)$r->deli_order_id,
-                            'can_select'         => $can,
-                            'disabled_reason'    => $why,
+                            'user_id'           => (string)$r->user_id,
+                            'display_user_id'   => (string)$r->user_id,
+                            'display_user_name' => $userNameMap[(string)$r->user_id] ?? (string)$r->user_id,
+
+                            'source'            => 'TDeli',
+                            'order_status'      => (int)$r->order_status,
+                            'order_status_label'=> '登録済',
+                            'confirm_status'    => ((int)$r->order_status === 1 ? '確定' : '未確定'),
+
+                            'reception_phase'   => $periodPhase,
+                            'reception_status'  => $periodLabel,
+
+                            'create_date'       => $r->create_date,
+                            'update_date'       => $r->update_date,
+                            'deli_order_id'     => (int)$r->deli_order_id,
+
+                            'can_select'        => $can,
+                            'disabled_reason'   => $why,
                         ];
                     }
-                    // ★ 未登録行は「行用フェーズ」に補正して表示する
-                    [$phPhaseCode, $phReception] = $this->resolveRowPhaseForPlaceholder(
-                        $periodPhase,
-                        $this->getSqlNowJst(),
-                        $t->add_deadline_date,
-                        $t->entry_start_date
-                    );
+
                     // プレースホルダ
-                    $ph = $this->makePlaceholder($termId, $start, $end, $dead, '新規登録', $phReception, $phPhaseCode);
-                    $ph->entry_start_date = $t->entry_start_date;
-                    // isPlaceholder=true, isConfirmed=false で判定
-                    [$can, $why] = $this->computeRowTouchFlags(
-                        $phPhaseCode,
-                        true,                                  // isPlaceholder
-                        false,                                 // isConfirmed
-                        $level,
-                        $t->add_deadline_date,
-                        $t->upd_deadline_date,
-                        $t->entry_start_date
+                    $ph = $this->makePlaceholder(
+                        $termId, $start, $end, $dead,
+                        '新規登録', $periodLabel, $periodPhase
                     );
+                    $ph->entry_start_date = $t->entry_start_date;
+
+                    [$can, $why] = $this->computeRowTouchFlags(
+                        $periodPhase,
+                        true,
+                        false,
+                        $level,
+                        $t
+                    );
+
                     $ph->can_select      = $can;
                     $ph->disabled_reason = $why;
                     $rows[] = $ph;
+                }
 
-                } elseif ($level === 2) {
-                    // 更新（ownerは無視）：該当TDeli全部＋該当なしならプレースホルダ1行
+                /*
+                |--------------------------------------------------------------------------
+                | L2 / L4 : 更新者
+                |--------------------------------------------------------------------------
+                */
+                elseif (in_array($level, [2, 4], true)) {
+
                     if (!empty($existing)) {
                         foreach ($existing as $r) {
-                            $isConfirmed = ((int)$r->order_status === 1);
                             [$can, $why] = $this->computeRowTouchFlags(
-                                $existingPhaseCode,
-                                false,                                // isPlaceholder
-                                ((int)$r->order_status === 1),        // isConfirmed
+                                $periodPhase,
+                                false,
+                                ((int)$r->order_status === 1),
                                 $level,
-                                $t->add_deadline_date,
-                                $t->upd_deadline_date,
-                                $t->entry_start_date
+                                $t
                             );
 
                             $rows[] = (object)[
-                                'term_id'            => $termId,
-                                'start_date'         => $start,
-                                'end_date'           => $end,
-                                'entry_start_date'   => $t->entry_start_date,
-                                'add_deadline_date'  => $dead,
-                                'user_id'            => (string)$r->user_id,
-                                'display_user_id'    => (string)$r->user_id,
-                                'display_user_name'  => $userNameMap[(string)$r->user_id] ?? (string)$r->user_id,
-                                'source'             => 'TDeli',
-                                'order_status'       => (int)$r->order_status,
-                                'order_status_label' => '登録済', // ★固定
-                                'reception_status' => $existingReception,
-                                'reception_phase'  => $existingPhaseCode,
-                                'confirm_status'     => ((int)$r->order_status === 1 ? '確定' : '未確定'),
-                                'create_date'        => $r->create_date,
-                                'update_date'        => $r->update_date,
+                                'term_id'           => $termId,
+                                'start_date'        => $start,
+                                'end_date'          => $end,
+                                'entry_start_date'  => $t->entry_start_date,
+                                'add_deadline_date' => $dead,
 
-                                'deli_order_id'      => (int)$r->deli_order_id,
-                                'can_select'         => $can,
-                                'disabled_reason'    => $why,
+                                'user_id'           => (string)$r->user_id,
+                                'display_user_id'   => (string)$r->user_id,
+                                'display_user_name' => $userNameMap[(string)$r->user_id] ?? (string)$r->user_id,
+
+                                'source'            => 'TDeli',
+                                'order_status'      => (int)$r->order_status,
+                                'order_status_label'=> '登録済',
+                                'confirm_status'    => ((int)$r->order_status === 1 ? '確定' : '未確定'),
+
+                                'reception_phase'   => $periodPhase,
+                                'reception_status'  => $periodLabel,
+
+                                'create_date'       => $r->create_date,
+                                'update_date'       => $r->update_date,
+                                'deli_order_id'     => (int)$r->deli_order_id,
+
+                                'can_select'        => $can,
+                                'disabled_reason'   => $why,
                             ];
                         }
                     } else {
-                        // ★ 未登録行は「行用フェーズ」に補正して表示する
-                        [$phPhaseCode, $phReception] = $this->resolveRowPhaseForPlaceholder(
-                            $periodPhase,
-                            $this->getSqlNowJst(),
-                            $t->add_deadline_date,
-                            $t->entry_start_date
+                        // 未登録 → プレースホルダ
+                        $ph = $this->makePlaceholder(
+                            $termId, $start, $end, $dead,
+                            '新規登録', $periodLabel, $periodPhase
                         );
-                        // プレースホルダ
-                        $ph = $this->makePlaceholder($termId, $start, $end, $dead, '新規登録', $phReception, $phPhaseCode);
                         $ph->entry_start_date = $t->entry_start_date;
 
-                        // ★ 可否判定
                         [$can, $why] = $this->computeRowTouchFlags(
-                            $phPhaseCode,
-                            true,   // isPlaceholder
-                            false,  // isConfirmed
+                            $periodPhase,
+                            true,
+                            false,
                             $level,
-                            $t->add_deadline_date,
-                            $t->upd_deadline_date,
-                            $t->entry_start_date
+                            $t
                         );
 
-                        // ★ 追加：受付開始前は“行ごと非表示”
-                        if (!$can && $why === '追加受付の開始前です') {
-                            // 表示しない
-                            continue;
+                        if ($can) {
+                            $ph->can_select      = true;
+                            $ph->disabled_reason = null;
+                            $rows[] = $ph;
                         }
-                        // 常に載せる。選択可否は can_select/disabled_reason で表現
-                        $ph->can_select      = $can;
-                        $ph->disabled_reason = $why;
-                        $rows[] = $ph;  // ← can=false でも必ず追加
-                        // can=false（例：開始12:00前）は何も追加しない→一覧に出ない
                     }
+                }
 
-                } elseif ($level === 0) {
-                    // 閲覧（disp_user_idsフィルタ）
-                    $any = false;
-                    // $any = ture;
+                /*
+                |--------------------------------------------------------------------------
+                | L0 : 閲覧
+                |--------------------------------------------------------------------------
+                */
+                elseif ($level === 0) {
 
                     foreach ($existing as $r) {
                         if (!in_array((string)$r->user_id, $dispUserIds, true)) {
                             continue;
                         }
-                        $any = true;
-
-                        // 既存TDeliは「期フェーズ」で判定（L0なので結果は can_select=false だが理由付与のため呼ぶ）
-                        [$can, $why] = $this->computeRowTouchFlags(
-                            $existingPhaseCode,                  // ★既存は期フェーズ
-                            false,                               // isPlaceholder
-                            ((int)$r->order_status === 1),       // isConfirmed
-                            $level,                              // = 0（閲覧）
-                            $t->add_deadline_date,
-                            $t->upd_deadline_date,
-                            $t->entry_start_date
-                        );
-                        Log::debug(var_export($can, true));
 
                         $rows[] = (object)[
-                            'term_id'            => $termId,
-                            'start_date'         => $start,
-                            'end_date'           => $end,
-                            'entry_start_date'   => $t->entry_start_date,
-                            'add_deadline_date'  => $dead,
-                            'user_id'            => (string)$r->user_id,
-                            'display_user_id'    => (string)$r->user_id,
-                            'display_user_name'  => $userNameMap[(string)$r->user_id] ?? (string)$r->user_id,
-                            'source'             => 'TDeli',
-                            'order_status'       => (int)$r->order_status,
-                            'order_status_label' => '登録済',
-                            'reception_status'   => $existingReception,
-                            'reception_phase'    => $existingPhaseCode,
-                            'confirm_status'     => ((int)$r->order_status === 1 ? '確定' : '未確定'),
-                            'create_date'        => $r->create_date,
-                            'update_date'        => $r->update_date,
-                            'deli_order_id'      => (int)$r->deli_order_id,
-                            'can_select'         => $can,          // L0 なので常に false になる
-                            'disabled_reason'    => $why,          // '閲覧専用です'
+                            'term_id'           => $termId,
+                            'start_date'        => $start,
+                            'end_date'          => $end,
+                            'entry_start_date'  => $t->entry_start_date,
+                            'add_deadline_date' => $dead,
+
+                            'user_id'           => (string)$r->user_id,
+                            'display_user_id'   => (string)$r->user_id,
+                            'display_user_name' => $userNameMap[(string)$r->user_id] ?? (string)$r->user_id,
+
+                            'source'            => 'TDeli',
+                            'order_status'      => (int)$r->order_status,
+                            'order_status_label'=> '登録済',
+                            'confirm_status'    => ((int)$r->order_status === 1 ? '確定' : '未確定'),
+
+                            'reception_phase'   => $periodPhase,
+                            'reception_status'  => $periodLabel,
+
+                            'create_date'       => $r->create_date,
+                            'update_date'       => $r->update_date,
+                            'deli_order_id'     => (int)$r->deli_order_id,
+
+                            'can_select'        => false,
+                            'disabled_reason'   => '閲覧専用です',
                         ];
-                    }
-
-                    if (!$any) {
-                        // 未登録（プレースホルダ）は「行用フェーズ」に補正
-                        [$phPhaseCode, $phReception] = $this->resolveRowPhaseForPlaceholder(
-                            $periodPhase,
-                            $this->getSqlNowJst(),
-                            $t->add_deadline_date,
-                            $t->entry_start_date
-                        );
-
-                        $ph = $this->makePlaceholder(
-                            $termId, $start, $end, $dead, '新規登録', $phReception, $phPhaseCode
-                        );
-                        $ph->entry_start_date = $t->entry_start_date;
-
-                        // 閲覧なので可否は false、理由は '閲覧専用です'
-                        [$can, $why] = $this->computeRowTouchFlags(
-                            $phPhaseCode,          // ★PHは行用フェーズ
-                            true,                  // isPlaceholder
-                            false,                 // isConfirmed
-                            $level,                // = 0
-                            $t->add_deadline_date,
-                            $t->upd_deadline_date,
-                            $t->entry_start_date
-                        );
-                        $ph->can_select      = $can;   // false
-                        $ph->disabled_reason = $why;   // '閲覧専用です'
-                        $rows[] = $ph;
                     }
                 }
             }
 
             return $rows;
         }
+
 
         /** プレースホルダ行の共通生成 */
         private function makePlaceholder(int $termId, $start, $end, $dead,string $displayName, string $reception, int $phaseCode): object {
@@ -2816,19 +2997,20 @@ public function export()
                     }
                 }
 
-                // ⑥ 確定状態（0=未確定,1=確定）
-                if (isset($p['confirm_status']) && $p['confirm_status'] !== '') {
-                    $want = (int)$p['confirm_status'];
-                    $status = $row->order_status ?? null;
+                // ⑤ 発注状態（registered / not_registered）
+                if (!empty($p['order_status'])) {
+                    if ($p['order_status'] === 'registered') {
+                        // 登録済 → 配食発注IDがあるものだけ
+                        if (empty($row->deli_order_id)) {
+                            return false;
+                        }
+                    }
 
-                    if ($status === null) return false; // null は NG
-                    if (!in_array((int)$status, [0, 1], true)) return false; // 0,1 以外は NG
-
-                    // ここに来た時点で order_status は 0 または 1 が保証される
-                    if ($want === 1) {
-                        if (!$isTDeli || (int)$status !== 1) return false;
-                    } else {
-                        if ($isTDeli && (int)$status !== 0) return false;
+                    if ($p['order_status'] === 'not_registered') {
+                        // 未登録 → 配食発注IDがないものだけ
+                        if (!empty($row->deli_order_id)) {
+                            return false;
+                        }
                     }
                 }
 
@@ -2967,27 +3149,47 @@ public function export()
             ];
         }
     // 入力UI生成
-        private function buildDeliveryMatrix(int $termId, string|int $userId, ?string $startYmd = null): array
-        {
-            // ① ユーザーのuse_pattern_idを取得
-            $usePatternId = $this->fetchTable('MUser')->find()
+        private function buildDeliveryMatrix(
+            int $termId,
+            string|int $userId,
+            ?string $startYmd = null
+        ): array {
+
+            // ==================================================
+            // ① ユーザーの use_pattern_id を取得（NULL許容）
+            // ==================================================
+            $user = $this->fetchTable('MUser')->find()
                 ->select(['use_pattern_id'])
                 ->where(['user_id' => $userId])
-                ->firstOrFail()
-                ->use_pattern_id;
+                ->first();
 
-            // ② pattern_idに対応するdelivery一覧を取得
-            $deliveryItems = $this->fetchTable('MDeliveryPatternSet')->find()
-            ->contain(['MDelivery'])
-            ->where(['use_pattern_id' => $usePatternId])
-            ->orderAsc('MDeliveryPatternSet.delivery_id') // 明示
-            ->all();
+            $usePatternId = $user?->use_pattern_id;
 
-            // ③ term_idに対応するstart_dateから7日分作成 → 入力開始日優先・クランプ・最大7日
+            // ==================================================
+            // ② delivery 一覧（use_pattern_id が NULL の場合は空）
+            // ==================================================
+            if ($usePatternId === null) {
+                \Cake\Log\Log::warning(
+                    "[buildDeliveryMatrix] use_pattern_id is NULL user_id={$userId}"
+                );
+                $deliveryItems = [];
+            } else {
+                $deliveryItems = $this->fetchTable('MDeliveryPatternSet')->find()
+                    ->contain(['MDelivery'])
+                    ->where(['use_pattern_id' => $usePatternId])
+                    ->orderAsc('MDeliveryPatternSet.delivery_id')
+                    ->all()
+                    ->toArray();
+            }
+
+            // ==================================================
+            // ③ term_id に対応する日付（最大7日）
+            // ==================================================
             $term = $this->fetchTable('MTerm')->get($termId);
 
             // 開始日の決定：入力 > term.start_date
             $base = $term->start_date;
+
             if ($startYmd) {
                 $cand = \Cake\I18n\FrozenDate::createFromFormat('Y-m-d', $startYmd);
                 if ($cand instanceof \Cake\I18n\FrozenDate) {
@@ -3000,6 +3202,7 @@ public function export()
             // 期間内で最大7日
             $days = [];
             $cur  = $base;
+
             for ($i = 0; $i < 7 && $cur <= $term->end_date; $i++) {
                 $days[] = $cur;
                 $cur    = $cur->addDays(1);
@@ -3007,6 +3210,7 @@ public function export()
 
             return [$deliveryItems, $days];
         }
+
     /** 現在の権限レベルを返す: 1=管理 / 2=更新 / 0=閲覧 / -1=不可 */
         private function currentLevel(): int
         {

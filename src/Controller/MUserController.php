@@ -31,14 +31,21 @@ class MUserController extends AppController
      *
      * @return \Cake\Http\Response|null|void Renders view
      */
+public function initialize(): void
+    {
+        parent::initialize();
+        $this->MUser = $this->fetchTable('MUser');
+    }
+
 public function index()
 {
-    $request = $this->request->is('get')
-        ? $this->request->getQuery()
-        : $this->request->getData();
-    
+    // POSTリクエスト取得（検索条件）
+    $request = $this->request->getData();
 
-    //施設グループリスト取得
+    // 削除フラグ（検索条件）
+    $showDeleted = isset($request['del_flg']) && $request['del_flg'] === '1';
+
+    // 施設グループリスト取得
     $MUserGroup = $this->fetchTable('MUserGroup');
     $groupList = $MUserGroup->find('list',
         keyField: 'user_group_id',
@@ -52,7 +59,7 @@ public function index()
         valueField: 'service_name',
     )->where(['del_flg' => 0])->toArray();
 
-    //状態リスト
+    // 状態リスト
     $statusList = [
         ''  => '',
         '0' => '準備中',
@@ -60,35 +67,41 @@ public function index()
         '2' => '取引停止',
     ];
 
-    // =========================
-    // 検索条件
-    // =========================
+    // 検索条件の初期化
     $userId      = $request['user_id'] ?? '';
     $userName    = $request['user_name'] ?? '';
+    $serviceId   = $request['use_service_id'] ?? '';
     $userGroupId = $request['user_group_id'] ?? '';
-    $showDeleted = isset($request['del_flg']) && $request['del_flg'] === '1';
 
-    // =========================
-    // MUser クエリ
-    // =========================
+    // status（checkbox複数）を配列に統一
+    $status = $request['status'] ?? [];
+    if (!is_array($status)) {
+        $status = [$status];
+    }
+
+    // MUserテーブル
     $mUserTable = $this->fetchTable('MUser');
 
+    // =========================
+    // クエリ作成（★修正ポイント）
+    // =========================
     $query = $mUserTable->find()
         ->select([
             'MUser.user_id',
             'MUser.user_name',
+            'MUser.status',
+            'MUser.disp_no',
+            'MUser.del_flg',
+            'MService.service_name',
             'user_group_id'   => 'mug.user_group_id',
             'user_group_name' => 'mug.user_group_name',
-            'MUser.disp_no',
-            'MUser.status',
-            'MUser.use_service_id',
         ])
+        ->contain(['MService'])
         ->leftJoin(
             ['mug' => 'm_user_group'],
             "ISNUMERIC(SUBSTRING(CAST(MUser.user_id AS VARCHAR), 1, 5)) = 1
              AND TRY_CAST(SUBSTRING(CAST(MUser.user_id AS VARCHAR), 1, 5) AS INT) = mug.user_group_id"
         )
-        ->contain(['MService'])
         ->where(['MUser.disp_no IS NOT' => null])
         ->order([
             'MUser.disp_no' => 'ASC',
@@ -100,162 +113,117 @@ public function index()
         $query->where(['MUser.del_flg' => '0']);
     }
 
-
-    $includeMenuService = !empty($request['include_menu_service']);
-    $includeFoodService = !empty($request['include_food_service']);
-
-    $serviceIds = [];
-
-    // 献立サービス
-    if ($includeMenuService) {
-        $serviceIds = array_merge($serviceIds, [1, 2, 4]);
-    }
-
-    // 単品食材サービス
-    if ($includeFoodService) {
-        $serviceIds = array_merge($serviceIds, [3, 4]);
-    }
-
-    $serviceIds = array_unique($serviceIds);
-
-    if (!empty($serviceIds)) {
-        $query->where(['MUser.use_service_id IN' => $serviceIds]);
-    }
-
-    // 施設グループ
-    if (!empty($userGroupId)) {
-        $query->where(['mug.user_group_id' => $userGroupId]);
-    }
-
     // 施設番号（完全一致）
-    if (!empty($userId)) {
+    if ($userId !== '') {
         $query->where(['MUser.user_id' => $userId]);
     }
 
     // 施設名（部分一致）
-    if (!empty($userName)) {
+    if ($userName !== '') {
         $query->where(['MUser.user_name LIKE' => "%{$userName}%"]);
     }
 
-    // 状態
-    if ($this->request->is('post')) {
-        $status = (array)($request['status'] ?? []);
-    } else {
-        $status = ['0', '1']; // 初期表示
+    // 発注サービス
+    if ($serviceId !== '') {
+        $query->where(['MService.use_service_id' => $serviceId]);
     }
 
-    $status = array_values(array_intersect($status, ['0', '1', '2']));
-    if (!empty($status)) {
-        $query->where(['MUser.status IN' => $status]);
+    // 状態（複数対応）
+    $validStatus = array_values(array_intersect($status, ['0', '1', '2']));
+    if (!empty($validStatus)) {
+        $query->where(['MUser.status IN' => $validStatus]);
     }
 
-    // 実行
-    $mUser  = $query->all();
+    // 施設グループによる絞込
+    if ($userGroupId !== '') {
+        $query->where(['mug.user_group_id' => $userGroupId]);
+    }
+
+    // 取得
+    $mUser = $query->all();
     $count = $mUser->count();
 
-    //リクエスト受け取り処理以下
+    // =========================
+    // ボタン処理
+    // =========================
     if ($this->request->is('post')) {
-        $action = $this->request->getData('action');
+        $action   = $this->request->getData('action');
         $selected = array_keys(array_filter($this->request->getData('select') ?? []));
-    //登録
-    if ($action === 'add') {
-        return $this->redirect(['action' => 'add']);
-    }
-            
-    //更新
-    if ($action === 'edit') {
-        if (count($selected) === 1) {
-            $id = $selected[0];
-            return $this->redirect(['action' => 'edit', $id]);
-        } elseif (count($selected) > 1) {
-            $this->Flash->error('更新は1件のみ選択可能です。');
-        } else {
-            $this->Flash->error('施設が選択されていません。');
-        }
-        return $this->redirect(['action' => 'index']);
-    }
 
-    if ($action === 'delete') {
-        if (!empty($selected)) {
-            $users = $mUserTable->find()->where(['user_id IN' => $selected, 'del_flg' => 0])->all();
+        // 新規
+        if ($action === 'add') {
+            return $this->redirect(['action' => 'add']);
+        }
+
+        // 編集
+        if ($action === 'edit') {
+            if (count($selected) === 1) {
+                return $this->redirect(['action' => 'edit', $selected[0]]);
+            }
+            $this->Flash->error(
+                count($selected) > 1
+                ? '更新は1件のみ選択可能です。'
+                : '施設が選択されていません。'
+            );
+            return $this->redirect(['action' => 'index']);
+        }
+
+        // 削除
+        if ($action === 'delete') {
+            if (empty($selected)) {
+                $this->Flash->error('施設が選択されていません。');
+                return $this->redirect(['action' => 'index']);
+            }
+
+            $users = $mUserTable->find()
+                ->where(['user_id IN' => $selected, 'del_flg' => 0])
+                ->all();
 
             if ($users->isEmpty()) {
                 $this->Flash->error('選択された施設はすでに削除済みか存在しません。');
-            } else {    
-                $mDispUser = $this->fetchTable('MDispUser');
-                $tFoodOrder = $this->fetchTable('TFoodOrder');
-                $tDeliOrder = $this->fetchTable('TDeliOrder');
+                return $this->redirect(['action' => 'index']);
+            }
 
-                $cannotDelete = [];
-  
-            //削除不可施設をチェック    
-                foreach ($users as $user) {
-                    $userId = $user->user_id;
+            $mDispUser  = $this->fetchTable('MDispUser');
+            $tFoodOrder = $this->fetchTable('TFoodOrder');
+            $tDeliOrder = $this->fetchTable('TDeliOrder');
 
-                    $inDisp = $mDispUser->exists(['disp_user_id' => $userId]);
-                    $inFood = $tFoodOrder->exists(['user_id' => $userId]);
-                    $inDeli = $tDeliOrder->exists(['user_id' => $userId]);
+            $cannotDelete = [];
 
-                    if ($inDisp || $inFood || $inDeli) {
-                        $cannotDelete[] = [
-                            'user_id' => $userId,
-                            'inDisp' => $inDisp,
-                            'inFood' => $inFood,
-                            'inDeli' => $inDeli
-                        ];
-                    }
-                }    
-
-                // 削除不可施設がある場合
-                if (!empty($cannotDelete)) {
-                    if (count($selected) === 1) {
-                        //1件選択時は理由ごとにエラーメッセージ
-                        $info = $cannotDelete[0];
-                        $userId = $info['user_id'];
-
-                        if ($info['inDisp']) {
-                            $this->Flash->error("{$userId} 施設番号が閲覧施設で使用されている為、削除できません。");
-                        } elseif ($info['inFood']) {
-                            $this->Flash->error("{$userId} 施設番号が食材発注で使用されている為、削除できません。");
-                        } elseif ($info['inDeli']) {
-                            $this->Flash->error("{$userId} 施設番号が配食発注で使用されている為、削除できません。");
-                        }
-                    } else {
-                        //複数選択時はまとめて表示
-                        $this->Flash->error('削除できない施設が含まれています。');
-                    }
-                } else {
-                    //全て削除可能な場合のみ削除実行
-                    foreach ($users as $user) {
-                        $user->del_flg = 1;
-                        $user->update_user = $this->request->getAttribute('identity')->get('user_id');
-                        $mUserTable->save($user);
-                    }
-                    $this->Flash->success('選択された施設を削除しました。');
+            foreach ($users as $user) {
+                $uid = $user->user_id;
+                if (
+                    $mDispUser->exists(['disp_user_id' => $uid]) ||
+                    $tFoodOrder->exists(['user_id' => $uid]) ||
+                    $tDeliOrder->exists(['user_id' => $uid])
+                ) {
+                    $cannotDelete[] = $uid;
                 }
             }
-        } else {
-            $this->Flash->error('施設が選択されていません。');
+
+            if (!empty($cannotDelete)) {
+                $this->Flash->error('削除できない施設が含まれています。');
+            } else {
+                foreach ($users as $user) {
+                    $user->del_flg = 1;
+                    $user->update_user = $this->request->getAttribute('identity')->get('user_id');
+                    $mUserTable->save($user);
+                }
+                $this->Flash->success('選択された施設を削除しました。');
+            }
+
+            return $this->redirect(['action' => 'index']);
         }
-        return $this->redirect(['action' => 'index']);
     }
-    }         
-        // 取得したレコード数をビューに渡す
-        $this->set(compact(
-            'mUser',
-            'count',
-            'userId',
-            'userName',
-            // 'serviceId',
-            'status',
-            'userGroupId',
-            'showDeleted',
-            'groupList',
-            'serviceList',
-            'statusList'
-        ));    
-    
+
+    // Viewへ渡す
+    $this->set(compact(
+        'mUser', 'count',
+        'userId', 'userName', 'serviceId', 'status', 'userGroupId',
+        'showDeleted', 'groupList', 'serviceList', 'statusList'
+    ));
 }
+
 
 
 /**
@@ -297,18 +265,11 @@ public function index()
 
         //パスワード？
         //質問リスト    
-        // 秘密の質問（汎用マスタから取得）
-        $MQuestion = $this->fetchTable('MKubun');
-        $questionList = $MQuestion->find('list',
-            keyField: 'kubun_value',
-            valueField: 'kubun_name'
-        )
-        ->where([
-            'kubun_cd' => 'MU',
-            'del_flg' => 0
-        ])
-        ->order(['disp_no' => 'ASC'])
-        ->toArray();
+        $questionList = [
+            '1' => '好きな食べ物は？',
+            '2' => '母親の旧姓は？',
+            '3' => '初めて飼ったペットの名前は？',
+        ];
 
         //配食パターン一覧、整形
         $mPatterns = $this->fetchTable('MDeliveryPattern')->find('list', 
@@ -510,19 +471,6 @@ public function edit($id = null)
         $serviceList[$id] = $id . ' / ' . $name;
     }
 
-    // 秘密の質問（汎用マスタから取得）
-    $MQuestion = $this->fetchTable('MKubun');
-    $questionList = $MQuestion->find('list',
-        keyField: 'kubun_value',
-        valueField: 'kubun_name'
-    )
-    ->where([
-        'kubun_cd' => 'MU',
-        'del_flg' => 0
-    ])
-    ->order(['disp_no' => 'ASC'])
-    ->toArray();
-
 
     //配食パターン一覧、整形
     $mPatterns = $this->fetchTable('MDeliveryPattern')->find('list', 
@@ -609,7 +557,7 @@ public function edit($id = null)
             $this->Flash->error(__('入力内容にエラーがあります。内容をご確認ください。'));
             Log::debug('[edit] バリデーションエラー: ' . print_r($mUser->getErrors(), true));
             $this->set(compact(
-            'mUser',  'mUserGroups','mServices', 'serviceList','selectedGroupId','questionList',
+            'mUser',  'mUserGroups','mServices', 'serviceList','selectedGroupId',
             'mPatterns', 'patternList','statusList', 'defaultLeadTime',
             'minLeadTime', 'viewedUsers', 'selectedDispUserIds'));
             $this->set('mode', 'edit');
@@ -642,9 +590,9 @@ public function edit($id = null)
              $selectedGroupId = null;
 
             $this->set(compact(
-            'mUser',  'mUserGroups','mServices', 'serviceList','questionList','selectedGroupId',
+            'mUser',  'mUserGroups','mServices', 'serviceList','selectedGroupId',
             'mPatterns', 'patternList','statusList', 'defaultLeadTime',
-            'minLeadTime', 'viewedUsers','selectedGroupId', 'selectedDispUserIds'));
+            'minLeadTime', 'viewedUsers', 'selectedDispUserIds'));
             $this->set('mode', 'edit');
             return $this->render('add_edit'); // ← return を忘れない
         }
@@ -684,7 +632,7 @@ public function edit($id = null)
        
     // ビューに渡す
     $this->set(compact(
-            'mUser',  'mUserGroups','mServices', 'serviceList','questionList',
+            'mUser',  'mUserGroups','mServices', 'serviceList',
             'mPatterns', 'patternList','statusList', 'defaultLeadTime',
             'minLeadTime', 'viewedUsers','selectedGroupId', 'selectedDispUserIds'));
     
@@ -727,7 +675,6 @@ public function request()
         $user = $this->MUser->find()
             ->where([
                 'user_id' => $user_id,
-                'del_flg' => 0
                 
             ])
             ->first();
@@ -805,7 +752,7 @@ public function reset()
         $newPass = $data['loginpass'] ?? '';
         $confirmPass = $data['confirmloginpass'] ?? '';
         $question = $data['secret_question'] ?? null;
-        $answer   = $data['answer'] ?? null;
+        $answer = $data['passanswer'] ?? null;
 
         $hasDigit  = preg_match('/\d/', $newPass);// 半角数字
         $hasUpper  = preg_match('/[A-Z]/', $newPass);// 半角英語大文字
@@ -818,10 +765,8 @@ public function reset()
             return;
         }
 
-        $errors = [];
-
         if (strlen($newPass) > 100) {
-            $errors['loginpass'][] = '入力可能桁数を超えています。';
+            $error['loginpass'][] = '入力可能桁数を超えています。';
         }
 
         if (!empty($errors)) {
