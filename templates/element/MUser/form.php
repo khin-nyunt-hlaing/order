@@ -194,14 +194,14 @@ $this->Form->setValueSources(['data', 'context']);
         <div class="input-range">
             <div class="label-stack">
                 <span>表示順</span>
-                <span style="font-size: 1.5rem;">(必須)</span>
+                <!-- <span style="font-size: 1.5rem;">(必須)</span> -->
             </div>
             <?= $this->Form->control('disp_no', [
                 'label' => false,
                 'id' => 'disp_no',
                 'name' => 'disp_no',
                 'min' => 0,
-                'required' => true,
+                // 'required' => true,
             ]) ?>
         </div>
 
