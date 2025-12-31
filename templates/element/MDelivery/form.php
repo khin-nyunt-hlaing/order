@@ -67,7 +67,7 @@
 
         </div>
 <div class="mDeliveryBox">
-     <?= $this->Form->button($mode === 'edit' ? '編集' : '登録', ['id' => '', 'class' => 'akabtn-like']) ?>
+     <?= $this->Form->button($mode === 'edit' ? '更新' : '登録', ['id' => '', 'class' => 'akabtn-like']) ?>
      <a id="" href="<?= $this->Url->build(['action' => 'index']) ?>"
       class="aobtn-like" onclick="return confirm('遷移すると入力内容が破棄されます。よろしいですか？')">戻る</a>
      

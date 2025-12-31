@@ -1,7 +1,5 @@
+<div class="menu content">
 <h3 class="cuttitlebox" style="font-size:1.4em;">メインメニュー</h3>
-
-<div class="menu-white-area">
-
   <!-- ===== 親メニュー ===== -->
   <div class="main-menus">
     <?php foreach ($menuTree as $parent => $subs): ?>

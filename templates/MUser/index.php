@@ -103,7 +103,7 @@
         <table class="styled-table">
         <thead>
             <tr>
-                <th>選択</th>
+                <!-- <th>選択</th> -->
                 <th>施設番号</th>
                 <th>施設名称</th>
                 <th>施設グループCD</th>
@@ -117,13 +117,13 @@
             <?php if (!in_array($user->status, [0, 1, 2])) continue; ?>
 
             <tr>
-                <td>
+                <!-- <td>
                     <?= $this->Form->control("select[{$user->user_id}]", [
                         'type' => 'checkbox',
                         'label' => false,
                         'class' => 'toggle-color',
                     ]) ?>
-                </td>
+                </td> -->
 
                 <!-- 施設番号 -->
                 <td>

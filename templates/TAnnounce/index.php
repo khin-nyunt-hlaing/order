@@ -256,7 +256,7 @@
     white-space:nowrap;
     color:#555;
     font-size:1.5rem;
-    font-weight:400;
+    font-weight:600;
     text-align:right;
     justify-self:end;
     align-self:center;

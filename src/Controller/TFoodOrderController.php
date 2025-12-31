@@ -1040,11 +1040,12 @@ class TFoodOrderController extends AppController
         $csv = "単品食材発注ID,施設グループ番号,施設グループ名称,ユーザID(施設番号),施設名,発注日,納品希望日,コード番号,商品名,分類ID,分類名称,規格,発注数,発注状態\n";
 
         foreach ($orders as $order) {
+            $userGroup = $order->m_user->m_user_group ?? null;
             
             $csv .= implode(',', [
                     '="' . $order->food_order_id . '"',
-                    '="' . ($order->m_user->m_user_groups[0]->user_group_id ?? '') . '"',
-                    '="' . ($order->m_user->m_user_groups[0]->user_group_name ?? '') . '"',
+                    '="' . ($userGroup?->user_group_id   ?? '') . '"',
+                    '="' . ($userGroup?->user_group_name ?? '') . '"',
                     '="' . $order->user_id . '"',
                     '="' . ($order->m_user->user_name ?? '') . '"',
                     '="' . ($order->order_date ? $order->order_date->format('Y/m/d') : '') . '"',
@@ -1220,10 +1221,11 @@ class TFoodOrderController extends AppController
             // BOM付きCSVを作成
             $csv = "単品食材発注ID,施設グループ番号,施設グループ名称,ユーザID(施設番号),施設名,発注日,納品希望日,コード番号,商品名,分類ID,分類名称,規格,発注数,発注状態\n";
             foreach ($orders as $order) {
+                $userGroup = $order->m_user->m_user_group ?? null;
                 $csv .= implode(',', [
                     '="' . $order->food_order_id . '"',
-                    '="' . ($order->m_user->m_user_groups[0]->user_group_id ?? '') . '"',
-                    '="' . ($order->m_user->m_user_groups[0]->user_group_name ?? '') . '"',
+                     '="' . ($userGroup?->user_group_id   ?? '') . '"',
+                    '="' . ($userGroup?->user_group_name ?? '') . '"',
                     '="' . $order->user_id . '"',
                     '="' . ($order->m_user->user_name ?? '') . '"',
                     '="' . ($order->order_date ? $order->order_date->format('Y/m/d') : '') . '"',

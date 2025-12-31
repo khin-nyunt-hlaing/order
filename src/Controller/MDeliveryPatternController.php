@@ -12,78 +12,101 @@ class MDeliveryPatternController extends AppController
      * Index
      */
     public function index()
-    {
-        $deliveryPatternId   = $this->request->getQuery('delivery_pattern_id');
-        $deliveryPatternName = $this->request->getQuery('delivery_pattern_name');
-        $includeDeleted      = $this->request->getQuery('del_flg') === '1';
+{
+    Log::debug('GET params: ' . print_r($this->request->getQuery(), true));
+    // ===== 検索条件 =====
+    $deliveryPatternId   = $this->request->getQuery('delivery_pattern_id');
+    $deliveryPatternName = $this->request->getQuery('delivery_pattern_name');
+    $includeDeleted      = !empty($this->request->getQuery('del_flg'));
 
-        $query = $this->MDeliveryPattern->find();
+    // ===== クエリ生成 =====
+    $query = $this->MDeliveryPattern->find();
 
-        if (!empty($deliveryPatternId) && ctype_digit($deliveryPatternId)) {
-            $query->where(['use_pattern_id' => (int)$deliveryPatternId]);
+    if (!empty($deliveryPatternId) && ctype_digit((string)$deliveryPatternId)) {
+        $query->where(['use_pattern_id' => (int)$deliveryPatternId]);
+    }
+
+    if (!empty($deliveryPatternName)) {
+        $query->where([
+            'delivery_pattern_name LIKE' => '%' . $deliveryPatternName . '%'
+        ]);
+    }
+
+    // 削除データ制御
+    if (!$includeDeleted) {
+        $query->where(['del_flg' => 0]);
+    }
+
+    // ===== 件数（paginate前）=====
+    $count = (clone $query)->count();
+
+    // ===== ページング =====
+    $this->paginate = [
+        'order' => ['use_pattern_id' => 'ASC']
+    ];
+    $mDeliveryPattern = $this->paginate($query);
+
+    // ===== POST操作 =====
+    if ($this->request->is('post')) {
+
+        $action = $this->request->getData('action');
+        $selected = $this->request->getData('select') ?? [];
+        $selectedIds = array_keys(array_filter($selected));
+        $selectcount = count($selectedIds);
+
+        // 追加
+        if ($action === 'add') {
+            return $this->redirect(['action' => 'add']);
         }
 
-        if (!empty($deliveryPatternName)) {
-            $query->where(['delivery_pattern_name LIKE' => '%' . $deliveryPatternName . '%']);
-        }
-
-        if (!$includeDeleted) {
-            $query->where(['del_flg' => 0]);
-        }
-
-        $this->paginate = [
-            'order' => ['use_pattern_id' => 'ASC']
-        ];
-
-        $mDeliveryPattern = $this->paginate($query);
-        $count = $query->count();
-
-        if ($this->request->is('post')) {
-
-            $action   = $this->request->getData('action');
-            $selected = array_keys(array_filter($this->request->getData('select') ?? []));
-
-            if ($action === 'add') {
-                return $this->redirect(['action' => 'add']);
+        // 編集
+        if ($action === 'edit') {
+            if ($selectcount === 1) {
+                return $this->redirect(['action' => 'edit', $selectedIds[0]]);
+            } elseif ($selectcount === 0) {
+                $this->Flash->error('配食商品パターンが選択されていません。');
+            } else {
+                $this->Flash->error('更新は1件のみ選択可能です。');
             }
+        }
 
-            if ($action === 'edit') {
-                if (empty($selected)) {
-                    $this->Flash->error('編集するデータを選択してください。');
-                    return $this->redirect(['action' => 'index']);
-                }
-                return $this->redirect(['action' => 'edit', $selected[0]]);
-            }
+        // 削除
+        if ($action === 'delete') {
+            if (!empty($selectedIds)) {
 
-            if ($action === 'delete') {
-                if (empty($selected)) {
-                    $this->Flash->error('削除するデータを選択してください。');
-                    return $this->redirect(['action' => 'index']);
-                }
-
-                $loginUserId = $this->request->getAttribute('identity')->get('user_id');
+                $loginUserId = $this->request
+                    ->getAttribute('identity')
+                    ->get('user_id');
 
                 $this->MDeliveryPattern->updateAll(
                     [
                         'del_flg'     => 1,
                         'update_user' => $loginUserId,
                     ],
-                    ['use_pattern_id IN' => $selected]
+                    ['use_pattern_id IN' => $selectedIds]
                 );
 
-                $this->Flash->success('削除しました。');
+                $this->Flash->success('選択された商品を削除しました。');
+
+                // ★ GET条件を保持（重要）
                 return $this->redirect(['action' => 'index']);
+            } else {
+                $this->Flash->error('配食商品パターンが選択されていません。');
             }
         }
-
-        $this->set(compact(
-            'mDeliveryPattern',
-            'count',
-            'deliveryPatternId',
-            'deliveryPatternName',
-            'includeDeleted'
-        ));
     }
+
+    // ===== Viewへ =====
+    $this->set(compact(
+        'mDeliveryPattern',
+        'count',
+        'deliveryPatternId',
+        'deliveryPatternName',
+        'includeDeleted'
+    ));
+}
+
+
 
     /**
      * Add 完全版

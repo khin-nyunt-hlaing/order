@@ -16,12 +16,15 @@
  * 
  */
 ?>
+<?php
+// POSTされた値を優先的にフォームに反映させる
+$this->Form->setValueSources(['data', 'context']);
+?>
 <div class="mUsers index content"><!--common-uiのcssをわざと外してます-->
     <?= $this->Form->create($mUser, ['type' => 'post']) ?>
 
     <div class="titlebox">
         <h2><?= $mode === 'edit' ? '施設編集' : '施設登録' ?></h2>
-        <?= $this->Flash->render() ?>
     </div>
 
     <div class="flex-vertical" style="padding-top:1%; padding-left:3%; gap: 1.5rem"><!--ここのcssは何やろ？-->
@@ -93,7 +96,10 @@
                 <span style="font-size: 1.5rem;">(必須)</span>
             </div>
             <?= $this->Form->control('user_name', [
-                'label' => false, 'id' => 'user_name']) ?>
+                'label' => false, 
+                'type' => 'text',
+                'id' => 'user_name',
+                'required' => true,]) ?>
         </div>
 
         <div class="input-range">
@@ -145,9 +151,13 @@
                 'id' => 'use-pattern-id',
                 'options' => $patternList,
                 'label' => false,
-                'required' => false,
+                'required' => ($serviceList === '2.4'),  // ← ここで判定
                 'disabled' => true,//初期は触れない
-                'empty' => '選択してください'
+                'empty' => '選択してください',
+                'value' => $mode === 'edit'
+                        ? ($mUser->use_pattern_id ?? null)  // editのときはカラム値 or null
+                        : null,                           // addのときは空
+                'style' => 'max-width: 400px;'
             ]) ?>
         </div>
 
@@ -162,8 +172,6 @@
                 'min' => $minLeadTime,
                 'required' => false,
                 'disabled' => true,
-                'value' => $mode === 'edit' ? $mUser->read_time : $defaultLeadTime
-
             ]) ?>
         </div>
 
@@ -176,8 +184,7 @@
                         'label' => false,
                         'type' => 'select',
                         'options' => $statusList,
-                        'empty' => '選択',
-                        
+                        'empty' => '選択してください',
                     ]) ?>
         </div>
 
@@ -191,13 +198,14 @@
                     'id' => 'disp_no',
                     'name' => 'disp_no',
                     'min' => 0,
+                    'required' => true,
                 ]) ?>
         </div>
 
             <?php if ($mode === 'edit'): ?>
                 <div class="input-range">
                     <div class="label-stack">
-                        <span>削除</span>
+                        <span style="padding-bottom: 16px;">削除</span>
                     </div>
                     <div class="del-flg-checkbox">
                         <?= $this->Form->control('del_flg', [
@@ -361,6 +369,15 @@ document.addEventListener('DOMContentLoaded', function () {
             leadTimeInput.value = '';
         }
     }
+
+      // invalid時の文言を①②に合わせる
+  patternSelect.addEventListener('invalid', function (e) {
+    if (patternSelect.required && !patternSelect.value) {
+      e.target.setCustomValidity('このフィールドを選択してください。'); // ①②と同じ文言
+    } else {
+      e.target.setCustomValidity('');
+    }
+  });
 
     // 初期化時
     toggleFields();

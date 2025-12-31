@@ -113,21 +113,27 @@ $this->Form->setValueSources(['data', 'context']);
             <div class="label-stack">
                 <span style="font-size: 1.8rem;">パスワード</span>
             </div>
-            <?= $this->Form->create($mUser, ['id' => 'MUserForm']) ?>
-                <?= $this->Form->control('password', [
-                    'label' => false,
-                    'type' => 'password',
-                    'id' => 'password',
-                    'readonly' => true,
-                    'value' => '',
-                    'autocomplete' => 'new-password',
-                    'style' => 'width:200px;'
-                ]) ?>
+
+            <?= $this->Form->control('password', [
+                'label' => false,
+                'type' => 'password',
+                'id' => 'password',
+                'readonly' => true,
+                'value' => '',
+                'autocomplete' => 'new-password',
+                'style' => 'width:200px;'
+            ]) ?>
+
             <button type="button" onclick="generatePassword()" style="margin-bottom: 0;">
-                <?= $mode === 'edit' ? '生成' : '生成' ?>
+                生成
             </button>
+
             <span id="plainPassword" style="font-weight:bold;"></span>
         </div>
+        <?= $this->Form->hidden('has_password', [
+            'id'    => 'has-password',
+            'value' => ($mode === 'edit' && !empty($mUser->password)) ? '1' : '0'
+        ]) ?>
 
         <?php if (($mode ?? '') === 'edit' && !empty($mUser->user_id)): ?>
             <div class="input-range">
@@ -307,16 +313,41 @@ $this->Form->setValueSources(['data', 'context']);
 <script>
 
 function generatePassword() {
+    const passwordInput = document.getElementById("password");
+    const hasPassword   = document.getElementById("has-password");
+    const messageSpan   = document.getElementById("plainPassword");
+
+    if (!passwordInput || !hasPassword) return;
+
+    // ★ ここで「1回目でも」判定できる
+    if (hasPassword.value === '1') {
+        const ok = confirm(
+            'すでにパスワードが設定されています。\n新しく生成しますか？'
+        );
+        if (!ok) {
+            return;
+        }
+    }
+
+    // ===== ランダム生成 =====
     const length = 10;
     const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     let password = "";
-    for (let i = 0; i < length; ++i) {
+
+    for (let i = 0; i < length; i++) {
         password += charset.charAt(Math.floor(Math.random() * charset.length));
     }
-    const hiddenField = document.getElementById("password");
-    if (hiddenField) hiddenField.value = password;//hiddenに変更byなかむら
-    document.getElementById("plainPassword").textContent = "生成パスワード: " + password;
+
+    passwordInput.value = password;
+    hasPassword.value = '1'; // ★ 以降も再生成扱い
+
+    if (messageSpan) {
+        messageSpan.textContent = "生成パスワード: " + password;
+    }
 }
+
+
+
 
 //秘密の質問と回答リセット用
 $('#resetSecretBtn').click(function() {

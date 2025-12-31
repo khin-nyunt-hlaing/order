@@ -77,9 +77,10 @@ class MUserTable extends AppTable
             'foreignKey' => 'user_id'
         ]);
 
-        $this->hasMany('MUserGroups', [
-            'foreignKey' => 'user_id',
-            'className'  => 'MUserGroup'
+        $this->belongsTo('MUserGroups', [
+            'foreignKey' => 'user_group_id',
+            'bindingKey' => 'user_group_id',
+            'className'  => 'MUserGroup',
         ]);
 
 
