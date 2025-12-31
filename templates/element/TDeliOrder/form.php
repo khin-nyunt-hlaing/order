@@ -3,6 +3,7 @@
 
     <?php
         // ★ 配列フィールドをアンロック
+        $mTerm = $mTerm ?? null;
         $this->Form->unlockField('quantity'); // quantity[...] 全体を対象
         $this->Form->unlockField('owner_id'); // L1で切り替える hidden/select も念のため
     ?>
@@ -14,7 +15,7 @@
     <?php endif; ?>
 
     <div class="titlebox">
-            <p1><?= $mode === 'edit' ? '配食発注更新' : '配食発注登録' ?></p1>
+            <p1><?= $mode === 'edit' ? '献立発注更新' : '献立発注登録' ?></p1>
     </div>
     
     <div class="flex-vertical" style="padding-left: 1.5%; padding-top: 3%;">
@@ -73,7 +74,7 @@
                     'type' => 'text',
                     'readonly' => true,
                     'value' => $mDelivery->period_text,
-                    'style' => 'background-color: #eee; width: 30rem;'
+                    'style' => 'background-color: #eee; width: 25rem;'
                 ]) ?>
                 </div>
 
@@ -87,9 +88,9 @@
                     'type' => 'text',
                     'readonly' => true,
                     'value' => $mDelivery->add_deadline_date ?? '',
-                    'style' => 'background-color: #eee;'
+                    'style' => 'background-color: #eee; width: 12rem;'
                 ]) ?>
-
+            <span class="note">正午12時</span>
             <div class="label-stack">
             <span>発注状態</span>
             </div>
@@ -99,7 +100,7 @@
             'type' => 'text',
             'readonly' => true,
             'value' => $mDelivery->order_status_text ?? '',
-            'style' => 'background-color: #eee;'
+            'style' => 'background-color: #eee; width: 12rem;'
             ]) ?>
 
             <div class="label-stack">
@@ -111,20 +112,35 @@
                 'type' => 'text',
                 'readonly' => true,
                 'value' => $mDelivery->request_status_text ?? '',
-                'style' => 'background-color: #eee;'
+                'style' => 'background-color: #eee; width: 12rem;'
             ]) ?>
+            
             </div>
 
-            <div id="matrixWrap">
+            <div class="deli-layout">
+
+            <!-- 左：配食登録ラベル -->
+            <div class="label-stack">
+                <span>配食登録</span>
+            </div>
+
+            <!-- 右：テーブル -->
+            <div class="deli-table" id="matrixWrap">
                 <?= $this->element('TDeliOrder/matrix', [
                     'deliveryItems'  => $deliveryItems,
                     'days'           => $days,
                     'quantityValues' => $quantityValues,
-                    'mode'           => $mode,     // 'add' / 'edit'
-                    'isL1'           => $isL1 ?? false,   // コントローラで用意したL1判定
-                    'canEdit'        => $canEdit ?? true, // 権限で編集可否（任意）
+                    'mode'           => $mode,
+                    'isL1'           => $isL1 ?? false,
+                    'canEdit'        => $canEdit ?? true,
+                    'term'           => $mTerm,
+                    'ownerId'        => $ownerId ?? null,
+                    
                 ]) ?>
             </div>
+
+            </div>
+            
 
     <div class="TDeliOrderBox">
         <?= $this->Form->button($mode === 'edit' ? '更新' : '登録', 
@@ -139,10 +155,31 @@
 <?= $this->Form->end() ?>
 </div>
 <style>
+    /* 配食登録 行 */
+.deli-layout {
+    display: flex;
+    align-items: flex-start;
+    gap: 1.5rem;
+    margin-top: 1rem;
+}
+
+/* 左：ラベル */
+.deli-label {
+    width: 6em;          /* 他の label-stack と揃える */
+    font-weight: bold;
+    padding-top: 0.5rem;
+}
+
+/* 右：テーブル */
+.deli-table {
+    flex: 1;
+    min-width: 0;        /* ← これ超重要（テーブル潰れ防止） */
+}
+
     .TDeliOrderBox{
     padding-top:3%;
     display: flex;
-    gap: 20px;
+    gap: 10px;
     padding-right:5%;
     justify-content: flex-end;
     margin-left: auto; /* これが右寄せのポイント */
@@ -205,7 +242,7 @@
         vertical-align: middle;   /* 上下中央寄せ */
         height: 2.5em;            /* 高さ */
         line-height: 1.5;         /* テキスト高さ補正 */
-        font-size: 2rem;          /* テキストサイズ */
+        font-size: 1.5rem;          /* テキストサイズ */
     }
 
 
@@ -311,5 +348,3 @@
             // });
    }); 
 </script>
-
-

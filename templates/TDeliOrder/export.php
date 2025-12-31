@@ -13,7 +13,7 @@
  <?= $this->Form->create(null, ['type' => 'get', 'class' => 'search-form','id' => 'extractForm','valueSources' => $this->request->is('post') ? ['data'] : ['query']]) ?>
 
 <div class="tObox">
-    <p class="cuttitlebox">配食発注データ書出し</p>
+    <p class="cuttitlebox">献立発注データ書出し</p>
 
     <div class="search-box-wrapper">
             
@@ -134,11 +134,40 @@
                               ]) ?>
                       </div>
                   </div>
+                  <div class="search-row1">
+                  <div class="search-field" style="gap:1rem;">
+                      <label class="search-label">施設名称</label>
+
+                      <?= $this->Form->control('facility_name', [
+                          'label' => false,
+                          'type' => 'text',
+                          
+                          'value' => $this->request->getQuery('facility_name') // ★ここ
+                      ]) ?>
+
+                      <span class="search-note">（部分一致）</span>
+                  </div>
+
+                  <div class="search-field check-inline">
+                      <label class="search-label">受付完了も表示する</label>
+
+                      <!-- OFF時も値を送るため -->
+                      <?= $this->Form->hidden('include_completed', ['value' => '0']) ?>
+
+                      <?= $this->Form->control('include_completed', [
+                          'type'    => 'checkbox',
+                          'label'   => false,
+                          'value'   => '1',
+                          'checked' => (bool)$this->request->getQuery('include_completed'),
+                      ]) ?>
+                  </div>
+              </div>
+
             </div>
 
             <div class="right-side" style="max-width: 100px; width: 100px;">
             <div class="search-col" style="justify-self: end;">
-                    <?= $this->Form->button('抽出', ['name' => 'action', 'value' => 'search', 'id'=>'btnSearch']) ?>
+                    <?= $this->Form->button('検索', ['name' => 'action', 'value' => 'search', 'id'=>'btnSearch']) ?>
             </div>
         </div>
       </div>
@@ -155,22 +184,34 @@
 
 <!-- 📤 書出しフォーム -->
     <span>出力先</span>
-    <?= $this->Form->create(null, ['type' => 'post', 'url' => ['action' => 'export']]) ?>
-            <?= $this->Form->hidden('entry_start_date_from', ['value' => $this->request->getQuery('entry_start_date_from')]) ?>
-            <?= $this->Form->hidden('entry_start_date_to', ['value' => $this->request->getQuery('entry_start_date_to')]) ?>
-            <?= $this->Form->hidden('add_deadline_date_from', ['value' => $this->request->getQuery('add_deadline_date_from')]) ?>
-            <?= $this->Form->hidden('add_deadline_date_to', ['value' => $this->request->getQuery('add_deadline_date_to')]) ?>
-            <?= $this->Form->hidden('create_date_from', ['value' => $this->request->getQuery('create_date_from')]) ?>
-            <?= $this->Form->hidden('create_date_to', ['value' => $this->request->getQuery('create_date_to')]) ?>
-            <?= $this->Form->hidden('update_date_from', ['value' => $this->request->getQuery('update_date_from')]) ?>
-            <?= $this->Form->hidden('update_date_to', ['value' => $this->request->getQuery('update_date_to')]) ?>
-            <?= $this->Form->hidden('user_id', ['value' => $this->request->getQuery('user_id')]) ?>
-            <?= $this->Form->hidden('order_status', ['value' => $this->request->getQuery('order_status')]) ?>
-            <?= $this->Form->hidden('confirm_status', ['value' => $this->request->getQuery('confirm_status')]) ?>
+<?= $this->Form->create(null, ['type' => 'post', 'url' => ['action' => 'export']]) ?>
+    <?php
+        // リクエストから値を取得する安全な方法
+        $req = $this->request;
+        // 検索ボタン(GET)と書出しボタン(POST)の両方の値を統合
+        $allParams = array_merge($req->getQueryParams(), (array)$req->getData());
+    ?>
+    
+    <?php // 既存の検索条件を hidden フィールドに正確にセット ?>
+    <?= $this->Form->hidden('entry_start_date_from',  ['value' => $allParams['entry_start_date_from'] ?? '']) ?>
+    <?= $this->Form->hidden('entry_start_date_to',    ['value' => $allParams['entry_start_date_to'] ?? '']) ?>
+    <?= $this->Form->hidden('add_deadline_date_from', ['value' => $allParams['add_deadline_date_from'] ?? '']) ?>
+    <?= $this->Form->hidden('add_deadline_date_to',   ['value' => $allParams['add_deadline_date_to'] ?? '']) ?>
+    <?= $this->Form->hidden('create_date_from',       ['value' => $allParams['create_date_from'] ?? '']) ?>
+    <?= $this->Form->hidden('create_date_to',         ['value' => $allParams['create_date_to'] ?? '']) ?>
+    <?= $this->Form->hidden('update_date_from',       ['value' => $allParams['update_date_from'] ?? '']) ?>
+    <?= $this->Form->hidden('update_date_to',         ['value' => $allParams['update_date_to'] ?? '']) ?>
+    <?= $this->Form->hidden('user_id',                ['value' => $allParams['user_id'] ?? '']) ?>
+    <?= $this->Form->hidden('confirm_status',         ['value' => $allParams['confirm_status'] ?? '']) ?>
+    
+    <?php // 特に重要な「施設名称(部分一致)」を追加 ?>
+    <?= $this->Form->hidden('facility_name',          ['value' => $allParams['facility_name'] ?? '']) ?>
 
+    <?php // 受付完了も含むかどうか ?>
+    <?= $this->Form->hidden('include_completed',      ['value' => $allParams['include_completed'] ?? '0']) ?>
 
     <div class="child-box">
-        <p style="width:  10%; text-align: right;">ファイル名</p>
+        <p style="width: 10%; text-align: right;">ファイル名</p>
         <?= $this->Form->control('export_file_name', [
             'label'=> false,
             'type' => 'text',
@@ -182,8 +223,6 @@
       'name' => 'action', 'value' => 'export',
       'type'     => 'submit',
       'class'    => 'akabtn-like',
-      // 'title'    => $hasExtracted ? '' : '先に「抽出」を実行してください',
-      // 'disabled' => empty($count), // or !$hasExportable
       'disabled' => (empty($count) || $count < 1)
     ]) ?>
         <a href="<?= $this->Url->build(['action' => 'index']) ?>" class="aobtn-like">戻る</a>
@@ -291,56 +330,94 @@
 
 
 <style>
-  .search-box {
+ .search-box {
     display: flex;
-    justify-content: space-between;
-    /* align-items: center; */
+    align-items: flex-end;
     gap: 0.5rem;
     padding: 1rem;
     background: #fff;
     border: 1.5px solid #ccc;
     border-radius: 0.4rem;
-  }
+    justify-content: flex-start;   /* 左寄せ */
+    width: 100%;
+    box-sizing: border-box;
+}
 
-  /* 左側：縦2段のブロック */
-  .search-row0 {
+
+/* 左側ブロック（縦並び） */
+.search-row0 {
     display: flex;
     flex-direction: column;
     gap: 1.5rem;
-    max-width:900px;
-  }
-  .search-field {
-      display: flex;
-      align-items: center;
-      text-align: center;
-      min-width: 200px;
-      flex-direction: row;
-  }
+    width: 100%;
+}
 
-
-  /* 各行：横に並べる（折り返さない） */
-  .search-row1 {
+/* 各行：横並び・左寄せ固定 */
+.search-row1 {
     display: flex;
-    flex-wrap: nowrap; /* ← 折り返し禁止 */
+    flex-wrap: nowrap;
     gap: 1rem;
     align-items: center;
     width: 100%;
-    margin: 0 auto; /* ← 左右中央寄せ */
-  }
-  .search-box .input{
-      display: block;
-      min-width: 120px !important;
-      margin: 0 !important;
-  }
-  .search-field{
-    min-width: 180px
-  }
-  .search-label{
+    justify-content: flex-start;   /* ★ 左寄せ */
+    margin: 0;                     /* ★ 中央寄せ解除 */
+}
+
+/* 各入力ブロック */
+.search-field {
+    display: flex;
+    align-items: center;
+    text-align: center;
+    min-width: 180px;
+    flex-direction: row;
+    margin-left: 0;
+}
+
+/* input共通 */
+.search-box .input {
+    display: block;
+    min-width: 120px !important;
+    margin: 0 !important;
+}
+
+/* ラベル */
+.search-label {
     display: inline-block;
-    width: 100px;        /* ← 横幅固定 */
-    text-align: right;   /* ← 右詰め */
-    font-weight: normal; /* ← 太字解除（必要に応じて） */
-  }
+    width: 100px;
+    text-align: right;
+    font-weight: normal;
+    white-space: nowrap;
+}
+
+/* 右側（検索ボタン） */
+.right-side {
+    margin-left: auto;
+    flex-shrink: 0;
+}
+
+.search-col {
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-end;
+}
+/* 横並び・折り返し禁止 */
+.check-inline {
+    display: flex;
+
+    gap:5.5rem;
+    white-space: nowrap;
+}
+
+/* CakePHP が生成する div.input を潰す */
+.check-inline .input {
+    margin: 10 !important;
+}
+
+/* label を折らせない */
+.check-inline .search-label {
+    white-space: nowrap;
+    margin: 0;
+}
       .child-box {
     display: flex;           /* 中の要素を横に */
     flex-direction: row;

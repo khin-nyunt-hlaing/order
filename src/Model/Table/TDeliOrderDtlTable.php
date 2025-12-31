@@ -33,24 +33,37 @@ class TDeliOrderDtlTable extends AppTable
      * @param array<string, mixed> $config The configuration for the Table.
      * @return void
      */
+   
+
     public function initialize(array $config): void
     {
         parent::initialize($config);
 
         $this->setTable('t_deli_order_dtl');
-        $this->setDisplayField(['deli_order_dtl_id']);
         $this->setPrimaryKey('deli_order_dtl_id');
 
-
         $this->addBehavior('Timestamp', [
-        'events' => [
-        'Model.beforeSave' => [
-            'create_date' => 'new',
-            'update_date' => 'always'
-      ]
-    ]
-  ]);
+            'events' => [
+                'Model.beforeSave' => [
+                    'create_date' => 'new',
+                    'update_date' => 'always'
+                ]
+            ]
+        ]);
+
+        // ★ 配食商品マスタ
+        $this->belongsTo('MDelivery', [
+            'foreignKey' => 'delivery_id',
+            'joinType'   => 'LEFT',
+        ]);
+
+        // ★ 親：配食発注トラン
+        $this->belongsTo('TDeliOrder', [
+            'foreignKey' => 'deli_order_id',
+            'joinType'   => 'INNER',
+        ]);
     }
+
 
     /**
      * Default validation rules.
