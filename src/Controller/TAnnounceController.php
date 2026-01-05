@@ -42,13 +42,16 @@ public function index()
     $facilityGroup = $q['facility_group'] ?? null;
     $serviceId     = $q['use_service_id'] ?? null;
     $includeEnd    = ($q['include_end'] ?? '') === '1';
+    $includeDeleted = ($q['include_deleted'] ?? '') === '1';
 
 
     $query = $this->TAnnounce->find()
         ->distinct(['TAnnounce.announce_id'])
-        ->leftJoinWith('TAnnounceUser.MUser')
-        ->where(['TAnnounce.del_flg' => '0'])
         ->order(['TAnnounce.announce_start_date' => 'DESC']);
+
+    if (!$includeDeleted) {
+        $query->where(['TAnnounce.del_flg' => '0']);
+    }
 
     // =========================
     // 条件適用
@@ -87,16 +90,53 @@ public function index()
 
     // 施設グループ（user_id 先頭一致）
     if (!empty($facilityGroup)) {
-        $query->where(function ($exp) use ($facilityGroup) {
-            return $exp->like('MUser.user_id', $facilityGroup . '%');
-        });
+
+        // ① 施設グループ名 → ID取得
+        $groupIds = $this->fetchTable('MUserGroup')->find()
+            ->select(['user_group_id'])
+            ->where([
+                'MUserGroup.user_group_name LIKE' => '%' . $facilityGroup . '%'
+            ])
+            ->all()
+            ->extract('user_group_id')
+            ->toArray();
+
+        if (!empty($groupIds)) {
+
+            // ② EXISTS でお知らせ抽出（SQL Server対応）
+            $subQuery = $this->fetchTable('TAnnounceUser')->find()
+                ->select(['dummy' => 1])
+                ->innerJoinWith('MUser')
+                ->where([
+                    'TAnnounceUser.announce_id = TAnnounce.announce_id',
+                    'MUser.user_group_id IN' => $groupIds
+                ]);
+
+            $query->where(function ($exp) use ($subQuery) {
+                return $exp->exists($subQuery);
+            });
+
+        } else {
+            // グループが見つからない場合は0件
+            $query->where(['1 = 0']);
+        }
     }
 
+
+        
     // 発注サービス
     if (!empty($serviceId)) {
-        $query->where([
-            'MUser.use_service_id' => $serviceId
-        ]);
+        $subQuery = $this->fetchTable('TAnnounceUser')->find()
+            ->select(['dummy' => 1])
+            ->innerJoinWith('MUser')
+            ->where([
+                'TAnnounceUser.announce_id = TAnnounce.announce_id',
+                'MUser.use_service_id' => $serviceId
+            ]);
+
+        $query->where(function ($exp) use ($subQuery) {
+            return $exp->exists($subQuery);
+        });
     }
 
     // =========================
@@ -253,7 +293,8 @@ public function index()
         'startTo',
         'facilityGroup',
         'serviceId',
-        'includeEnd'
+        'includeEnd',
+        'includeDeleted'
     ));
 
     $this->set('attachedFilesMap', $attachedFilesMap);

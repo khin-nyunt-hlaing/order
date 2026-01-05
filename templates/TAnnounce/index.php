@@ -2,17 +2,36 @@
 /**
  * @var \App\View\AppView $this
  * @var \Cake\Datasource\ResultSetInterface $tAnnounce
+ * @var bool $includeDeleted
  */
 ?>
 <div class="tAnnounce index content">
-
-    <h3 class="title" style="margin: 0;">お知らせ一覧</h3>
-
-    <div class="search-box-wrapper">
     <?= $this->Form->create(null, [
         'type' => 'get',
         'url'  => ['action' => 'index']
     ]) ?>
+    
+    <div class="title_box">
+        <h3 class="title" style="margin: 0;">お知らせ一覧</h3>
+
+        <!-- 削除データ切替 -->
+        <div class="deleted-filter">
+            <span class="filter-label">削除データ</span>
+
+            <?= $this->Form->checkbox('include_deleted', [
+                'value'       => '1',
+                'hiddenField' => '0',
+                'checked'     => (bool)$includeDeleted,
+                'id'          => 'include_deleted',
+                'onchange'    => 'this.form.submit();'
+            ]) ?>
+
+            <label for="include_deleted" class="filter-text">削除データを含める</label>
+        </div>
+    </div>
+    
+    <div class="search-box-wrapper">
+    
 
     <?php
     // ★ これがないとラベルは絶対に横にならない
@@ -26,15 +45,24 @@
         <!-- 1行目：掲載日付 + タイトル検索 -->
         <div class="lbl">掲載日付</div>
         <div class="date-range">
-            <?= $this->Form->control('start_from', ['type'=>'date','label'=>false]) ?>
+            <?= $this->Form->control('start_from', [
+                'type'  => 'date',
+                'label' => false,
+                'value' => $this->request->getQuery('start_from')
+            ]) ?>
             <span class="tilde">～</span>
-            <?= $this->Form->control('start_to', ['type'=>'date','label'=>false]) ?>
+            <?= $this->Form->control('start_to', [
+                'type'  => 'date',
+                'label' => false,
+                'value' => $this->request->getQuery('start_to')
+            ]) ?>
         </div>
         <div class="field-right">
             <label class="sr-label">タイトル検索</label>
             <?= $this->Form->control('title', [
-                'type' => 'text',
-                'label' => false
+                'type'  => 'text',
+                'label' => false,
+                'value' => $this->request->getQuery('title')
             ]) ?>
         </div>
 
@@ -42,7 +70,10 @@
         <div class="lbl">掲載データ</div>
         <div class="field">
             <label class="checkline">
-                <?= $this->Form->checkbox('include_end', ['value'=>1]) ?>
+                <?= $this->Form->checkbox('include_end', [
+    'value'   => 1,
+    'checked' => ($this->request->getQuery('include_end') === '1')
+]) ?>
                 掲載終了を含める
             </label>
         </div>
@@ -100,6 +131,7 @@
             <th>選択</th>
             <th>日付</th>
             <th>区分</th>
+            <th>削除</th>
             <th>お知らせ</th>
         </tr>
     </thead>
@@ -135,6 +167,10 @@
                     </td>
 
                     <td><?= h($announceDivList[$announce->announce_div] ?? '') ?></td>
+                    <td style="text-align:center;">
+                        <?= $announce->del_flg == 1 ? '✓' : '' ?>
+                    </td>
+
                     <td>
                         <!-- 開くトリガー -->
                         <button type="button"
@@ -321,6 +357,8 @@
     height:3rem;
     font-size:1.5rem;
 }
+
+
 .link-edit {
     color: #0000ee;
     text-decoration: underline;
@@ -358,4 +396,18 @@
 
         return confirm(`${count}件選択されています。\n本当に削除しますか？`);
     }
+    function toggleDeleted() {
+    const checked = document.getElementById('include_deleted').checked ? 1 : 0;
+
+    const params = new URLSearchParams(window.location.search);
+
+    // 削除データ切替
+    params.set('include_deleted', checked);
+
+    // ページングを戻す（重要）
+    params.delete('page');
+
+    // GETで再遷移
+    window.location.search = params.toString();
+}
 </script>
